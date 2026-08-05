@@ -1,0 +1,3 @@
+# multiple-browsers-example
+
+Renders several CEF browsers at once, each offscreen into its own OpenGL texture, laid out as tiles in a 3D grid you can orbit/pan/zoom with the mouse (hold Ctrl). Click a tile to select it - the selected browser gets a green border and is the only one that receives mouse and keyboard input. Ctrl+Numpad+ opens a new tab, Ctrl+Numpad- closes the selected one - both also available from the menu bar's Actions menu, alongside navigation, zoom, and dev tools controls for the selected browser.
