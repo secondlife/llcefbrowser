@@ -23,7 +23,7 @@ tools\build.bat
 or manually:
 
 ```
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCEF_PACKAGE_URL=<cef binary distribution URL>
+cmake -B build -G "Visual Studio 17 2022" -A x64  -DCEF_RUNTIME_LIBRARY_FLAG=/MD -DUSE_SANDBOX=OFF -DCEF_PACKAGE_URL=<cef minimal binary distribution URL>
 cmake --build build --config Release
 ```
 
