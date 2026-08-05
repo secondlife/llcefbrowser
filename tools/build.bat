@@ -14,4 +14,3 @@ cmake -B build -G "Visual Studio 17 2022" -A x64  -DCEF_RUNTIME_LIBRARY_FLAG=/MD
 cmake --build build --config Release
 
 :end
-popd

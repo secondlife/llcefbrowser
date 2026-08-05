@@ -232,8 +232,8 @@ source_group(
 # Copy necessary runtime files
 #
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  file(MAKE_DIRECTORY "${DESTINATION_DIR}")
   set(DESTINATION_DIR "${CMAKE_BINARY_DIR}/Release")
+  file(MAKE_DIRECTORY "${DESTINATION_DIR}")
   foreach(file_path IN LISTS CEF_BINARY_FILES)
     set(SOURCE_FILE "${cef_prebuild_SOURCE_DIR}/Release/${file_path}")
     file(COPY "${SOURCE_FILE}" DESTINATION "${DESTINATION_DIR}")

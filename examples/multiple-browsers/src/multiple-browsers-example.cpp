@@ -591,6 +591,11 @@ void multipleBrowsers::createBrowserTab(const std::string& url, int width, int h
     }
 
     llCefBrowserHandle handle = mCefBrowserManager->CreateBrowser(url, width, height);
+    if (! handle.IsValid())
+    {
+        LLCB_OUT_APP_ERR("CreateBrowser failed - not adding a tab for it")
+        return;
+    }
     initCEFCallbacks(handle);
 
     // Owned by this app, not the library - freed in destroyBrowserTab()/
