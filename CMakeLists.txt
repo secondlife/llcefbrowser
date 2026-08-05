@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(llcefbrowser)
 
 # ==============================================================================
-# Grab and build CEF DLL Wrapper 
+# Grab and build CEF DLL Wrapper
 # (Define a CEF package URL or local DIR in the CMake command line)
 #
 if(NOT DEFINED CEF_PACKAGE_URL)
@@ -93,8 +93,8 @@ source_group("include" FILES ${LLCEFBROWSER_PUBLIC_HEADERS})
 source_group("src" FILES ${LLCEFBROWSER_SRCS})
 
 # ==============================================================================
-# Populate the version header file from the template using CEF and Chromium 
-# version numbers along with some git params for the library version 
+# Populate the version header file from the template using CEF and Chromium
+# version numbers along with some git params for the library version
 #
 file(REMOVE "${PROJECT_SOURCE_DIR}/include/llCefBrowserVersion.h")
 file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CEF_VERSION_MAJOR_STR
@@ -150,12 +150,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 
-# ==============================================================================
-# Example application - Single browser OpenGL example
-#
-add_executable(single-browser-example
-  examples/single-browser/src/single-browser-example.cpp
-  examples/single-browser/src/single-browser-example.h
+set(LLCEFBROWSER_EXAMPLES_THIRD_PARTY_FILES
   ${THIRD-PARTY-PREFIX}/${GLAD_FOLDER}/src/glad.c
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui.cpp
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_draw.cpp
@@ -163,6 +158,15 @@ add_executable(single-browser-example
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_impl_opengl2.cpp
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_tables.cpp
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_widgets.cpp
+)
+
+# ==============================================================================
+# Example application - Single browser OpenGL example
+#
+add_executable(single-browser-example
+  examples/single-browser/src/single-browser-example.cpp
+  examples/single-browser/src/single-browser-example.h
+  ${LLCEFBROWSER_EXAMPLES_THIRD_PARTY_FILES}
 )
 target_include_directories(
   single-browser-example
@@ -181,6 +185,11 @@ target_link_libraries(
   comctl32
   llcefbrowser
 )
+source_group(
+  "Third Party Files"
+  FILES
+  ${LLCEFBROWSER_EXAMPLES_THIRD_PARTY_FILES}
+)
 
 # ==============================================================================
 # Example application - Multiple browsers OpenGL example
@@ -188,13 +197,7 @@ target_link_libraries(
 add_executable(multiple-browsers-example
   examples/multiple-browsers/src/multiple-browsers-example.cpp
   examples/multiple-browsers/src/multiple-browsers-example.h
-  ${THIRD-PARTY-PREFIX}/${GLAD_FOLDER}/src/glad.c
-  ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui.cpp
-  ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_draw.cpp
-  ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_impl_glfw.cpp
-  ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_impl_opengl2.cpp
-  ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_tables.cpp
-  ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}/imgui_widgets.cpp
+  ${LLCEFBROWSER_EXAMPLES_THIRD_PARTY_FILES}
 )
 target_include_directories(
   multiple-browsers-example
@@ -216,8 +219,13 @@ target_link_libraries(
 set_property(
   DIRECTORY
   PROPERTY
-  VS_STARTUP_PROJECT 
+  VS_STARTUP_PROJECT
   multiple-browsers-example
+)
+source_group(
+  "Third Party Files"
+  FILES
+  ${LLCEFBROWSER_EXAMPLES_THIRD_PARTY_FILES}
 )
 
 # ==============================================================================
