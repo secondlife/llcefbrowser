@@ -139,7 +139,10 @@ configure_file(
 # ==============================================================================
 # Example applications - common
 #
-set(THIRD-PARTY-PREFIX ${CMAKE_SOURCE_DIR}/examples/third-party)
+# CMAKE_CURRENT_SOURCE_DIR, not CMAKE_SOURCE_DIR: this must resolve relative
+# to this file even when llcefbrowser is add_subdirectory()'d from a parent
+# project, not just when it's the top-level project itself.
+set(THIRD-PARTY-PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/examples/third-party)
 set(GLAD_FOLDER "glad-0.1.36")
 set(IMGUI_FOLDER "imgui-1.92.2")
 set(JSON_FOLDER "json-3.12.0")
