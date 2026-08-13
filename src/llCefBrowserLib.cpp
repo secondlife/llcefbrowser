@@ -214,6 +214,22 @@ namespace {
 
             void OnBeforeCommandLineProcessing(const CefString & processType,
                                                CefRefPtr<CefCommandLine> commandLine) override {
+                // Windowless/OSR browsers have no real OS window, so this host never calls
+                // WasHidden(false) or anything else that would tell Chromium's occlusion/
+                // backgrounding heuristics the view is actually on-screen and in use. Left
+                // alone, Chromium can judge the renderer "backgrounded" and heavily throttle
+                // requestAnimationFrame/JS timers/CSS animations to save power - which shows
+                // up as smooth-scroll and other animations stalling for hundreds of ms to
+                // multiple seconds, exactly as if the page itself were slow, even though a
+                // real windowed browser tab (always unambiguously visible) never throttles
+                // and runs the identical page instantly. disable-background-timer-throttling
+                // in particular is read by Blink's own scheduler inside the renderer process,
+                // so unlike the browser-process-only switches below, these three must be
+                // applied for every process type, not just processType.empty().
+                commandLine->AppendSwitch("disable-backgrounding-occluded-windows");
+                commandLine->AppendSwitch("disable-renderer-backgrounding");
+                commandLine->AppendSwitch("disable-background-timer-throttling");
+
                 if (processType.empty())
                 {
                     // Chrome's own built-in login prompt UI intercepts HTTP auth challenges
