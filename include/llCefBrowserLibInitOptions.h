@@ -88,7 +88,7 @@ struct llCefBrowserLibInitOptions
     llCefLogSeverity logSeverity = llCefLogSeverity::Default;
 
     std::string javascriptFlags;         // raw V8 flags, e.g. "--expose-gc"
-    int remoteDebuggingPort = 1964;         // 0 = disabled; 1024-65535 to enable chrome://inspect
+    int remoteDebuggingPort = 0;         // 0 = disabled; 1024-65535 to enable chrome://inspect
     int uncaughtExceptionStackSize = 0;  // 0 = OnUncaughtException() disabled
 
     // ARGB background color shown before a document loads. Alpha must be
