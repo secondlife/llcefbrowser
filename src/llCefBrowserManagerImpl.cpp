@@ -653,6 +653,14 @@ void llCefBrowserManagerImpl::SetOnCustomSchemeURLCallback(llCefBrowserHandle ha
     }
 }
 
+void llCefBrowserManagerImpl::SetOnOpenPopupCallback(llCefBrowserHandle handle, std::function<void(const std::string&, const std::string&)> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetOnOpenPopupCallback(std::move(callback));
+    }
+}
+
 void llCefBrowserManagerImpl::SetOnPageSourceRetrievedCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback, size_t maxBytes)
 {
     if (llCefBrowser* b = Get(handle))

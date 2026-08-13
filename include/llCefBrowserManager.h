@@ -302,6 +302,17 @@ class llCefBrowserManager {
         // to handle the URL itself.
         void SetOnCustomSchemeURLCallback(llCefBrowserHandle handle, std::function<void(const std::string& url, bool userGesture, bool isRedirect)> callback);
 
+        // Fired when the page tries to open a link in a new window/tab
+        // (target="_blank", rel="noopener", window.open(), etc.) via
+        // CefLifeSpanHandler::OnBeforePopup. This library never creates the
+        // popup browser itself - it always returns true from OnBeforePopup
+        // to cancel it, and reports targetUrl/targetFrameName here instead so
+        // the app can decide what "opening a link" should mean (a new panel,
+        // a new physical browser window, dispatched as a SLURL, etc).
+        // Overwrites any previously registered callback for this handle;
+        // pass nullptr to unregister.
+        void SetOnOpenPopupCallback(llCefBrowserHandle handle, std::function<void(const std::string& targetUrl, const std::string& targetFrameName)> callback);
+
         // Fired once per main-frame load with the page's HTML source,
         // truncated to at most maxBytes bytes. Retrieved via
         // CefFrame::GetSource() right after the main frame's OnLoadEnd fires

@@ -177,6 +177,19 @@ class llCefBrowser : public CefClient,
         void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
         void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 
+        // See llCefBrowserManager::SetOnOpenPopupCallback. Always returns
+        // true (cancel) - this library never lets CEF create the popup
+        // browser itself, since a windowless/OSR host has nowhere sensible
+        // to put one.
+        bool OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                           int popup_id, const CefString& target_url,
+                           const CefString& target_frame_name,
+                           CefLifeSpanHandler::WindowOpenDisposition target_disposition, bool user_gesture,
+                           const CefPopupFeatures& popupFeatures, CefWindowInfo& windowInfo,
+                           CefRefPtr<CefClient>& client, CefBrowserSettings& settings,
+                           CefRefPtr<CefDictionaryValue>& extra_info,
+                           bool* no_javascript_access) override;
+
         // --- CefRequestHandler ---
         // Lets the message router cancel any pending JS queries for a frame
         // that's navigating away, and - see
@@ -418,6 +431,11 @@ class llCefBrowser : public CefClient,
             mOnCustomSchemeURL = std::move(callback);
         }
 
+        // See llCefBrowserManager::SetOnOpenPopupCallback.
+        void SetOnOpenPopupCallback(std::function<void(const std::string&, const std::string&)> callback) {
+            mOnOpenPopup = std::move(callback);
+        }
+
         // See llCefBrowserManager::SetOnPageSourceRetrievedCallback.
         void SetOnPageSourceRetrievedCallback(std::function<void(const std::string&)> callback, size_t maxBytes) {
             mOnPageSourceRetrieved = std::move(callback);
@@ -557,6 +575,7 @@ class llCefBrowser : public CefClient,
         std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> mOnAuthRequest;
 
         std::function<void(const std::string&, bool, bool)> mOnCustomSchemeURL;
+        std::function<void(const std::string&, const std::string&)> mOnOpenPopup;
 
         std::function<void(const std::string&)> mOnPageSourceRetrieved;
         size_t mMaxSourceBytes = 2048;
