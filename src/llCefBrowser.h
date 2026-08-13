@@ -49,7 +49,8 @@ class llCefBrowser : public CefClient,
     public CefDisplayHandler,
     public CefLoadHandler,
     public CefDialogHandler,
-    public CefJSDialogHandler {
+    public CefJSDialogHandler,
+    public CefDownloadHandler {
     public:
         llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager);
 
@@ -81,6 +82,9 @@ class llCefBrowser : public CefClient,
             return this;
         }
         CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override {
+            return this;
+        }
+        CefRefPtr<CefDownloadHandler> GetDownloadHandler() override {
             return this;
         }
         bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
@@ -158,6 +162,20 @@ class llCefBrowser : public CefClient,
                           const std::vector<CefString>& acceptExtensions,
                           const std::vector<CefString>& acceptDescriptions,
                           CefRefPtr<CefFileDialogCallback> callback) override;
+
+        // --- CefDownloadHandler ---
+        // A download's default handling (with no CefDownloadHandler at all) is to
+        // silently cancel it for an Alloy-style browser -- windowless/OSR apps always
+        // are Alloy-style, so without this override every download (e.g. a page's
+        // <a download> blob-click) would just vanish with no callback and no error.
+        // Instead, always route it through the exact same OnFileDialog/
+        // SetOnFileDialogCallback flow used for genuine file dialogs (matching
+        // Dullahan's own approach, a known-working reference for this): asking CEF to
+        // show its file-dialog flow for this download, in FILE_DIALOG_SAVE mode, is
+        // what makes CEF call OnFileDialog just below.
+        bool OnBeforeDownload(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDownloadItem> downloadItem,
+                              const CefString& suggestedName,
+                              CefRefPtr<CefBeforeDownloadCallback> callback) override;
 
         // --- CefJSDialogHandler ---
         // See llCefBrowserManager::SetOnJSDialogCallback. Unlike OnFileDialog,

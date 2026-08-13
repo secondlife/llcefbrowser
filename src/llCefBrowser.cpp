@@ -764,6 +764,17 @@ void llCefBrowser::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame
     }
 }
 
+bool llCefBrowser::OnBeforeDownload(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDownloadItem> downloadItem,
+                                    const CefString& suggestedName,
+                                    CefRefPtr<CefBeforeDownloadCallback> callback)
+{
+    CEF_REQUIRE_UI_THREAD();
+
+    const bool show_file_dialog = true;
+    callback->Continue(suggestedName, show_file_dialog);
+    return true;
+}
+
 bool llCefBrowser::OnFileDialog(CefRefPtr<CefBrowser> browser, FileDialogMode mode,
                                 const CefString& title, const CefString& defaultFilePath,
                                 const std::vector<CefString>& acceptFilters,
