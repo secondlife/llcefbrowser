@@ -359,6 +359,19 @@ void llCefBrowser::OnAfterCreated(CefRefPtr<CefBrowser> browser)
         return;
     }
     mCefBrowser = browser;
+
+    // Windowless/OSR browsers have no real OS window, so CEF has no way to
+    // observe visibility itself -- it relies entirely on this explicit
+    // signal. Left uncalled, CEF's own occlusion tracking appears to default
+    // toward "not visible," independently throttling animation/timer
+    // scheduling regardless of the disable-backgrounding-* command-line
+    // switches (which target specific known throttling behaviors, not this
+    // more fundamental visibility state). Every browser this library
+    // creates is always meant to be actively rendering, so signal visible
+    // unconditionally right away rather than exposing this as a per-caller
+    // toggle nothing here actually needs yet.
+    mCefBrowser->GetHost()->WasHidden(false);
+
     if (mCloseRequested)
     {
         // A destroy request arrived while creation was still in flight;
