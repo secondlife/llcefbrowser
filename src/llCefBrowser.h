@@ -236,6 +236,13 @@ class llCefBrowser : public CefClient,
         }
 
         void SetSize(int w, int h, bool clearImmediately = false);
+
+        // Requests a new compositor frame right now, rather than waiting for CEF's own
+        // windowless_frame_rate-driven internal timer to eventually get around to one --
+        // see llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
+        // setting, which this requires. A no-op if the browser hasn't been created yet.
+        void SendExternalBeginFrame();
+
         int GetWidth() const {
             return mWidth;
         }

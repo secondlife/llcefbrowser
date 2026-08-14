@@ -1146,6 +1146,14 @@ void llCefBrowser::CheckResizeWatchdog()
     }
 }
 
+void llCefBrowser::SendExternalBeginFrame()
+{
+    if (mCefBrowser)
+    {
+        mCefBrowser->GetHost()->SendExternalBeginFrame();
+    }
+}
+
 void llCefBrowser::SetSize(int w, int h, bool clearImmediately)
 {
     // Same underflow hazard as the constructor - see there.

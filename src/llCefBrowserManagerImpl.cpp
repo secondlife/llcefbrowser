@@ -159,6 +159,17 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     CefWindowInfo windowInfo;
     windowInfo.SetAsWindowless(nullptr);  // offscreen, no native parent window
 
+    // Compositing is driven explicitly (llCefBrowser::SendExternalBeginFrame(), called
+    // once per producer main-loop tick) rather than CEF's own windowless_frame_rate-
+    // paced internal timer -- that timer runs completely decoupled from when input
+    // actually arrives, so every interaction has to wait for CEF's own independently-
+    // scheduled next tick before any repaint even begins (confirmed via measurement:
+    // input-to-repaint gaps clustered in discrete bands near 1x/2x/3x the timer's own
+    // period, the signature of a fixed-rate scheduler rather than input-driven
+    // rendering). Driving it ourselves, right after processing each tick's input,
+    // removes that scheduling gap.
+    windowInfo.external_begin_frame_enabled = true;
+
     const llCefBrowserLibInitOptions& options = LLGetInitOptions();
 
     CefBrowserSettings browserSettings;
@@ -316,6 +327,15 @@ void llCefBrowserManagerImpl::ResizeBrowser(llCefBrowserHandle handle, int width
     if (llCefBrowser* b = Get(handle))
     {
         b->SetSize(width, height, clearImmediately);
+    }
+}
+
+void llCefBrowserManagerImpl::SendExternalBeginFrame(llCefBrowserHandle handle)
+{
+    CEF_REQUIRE_UI_THREAD();
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SendExternalBeginFrame();
     }
 }
 

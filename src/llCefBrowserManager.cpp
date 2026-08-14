@@ -99,6 +99,11 @@ void llCefBrowserManager::ResizeBrowser(llCefBrowserHandle handle, int width, in
     mImpl->ResizeBrowser(handle, width, height, clearImmediately);
 }
 
+void llCefBrowserManager::SendExternalBeginFrame(llCefBrowserHandle handle)
+{
+    mImpl->SendExternalBeginFrame(handle);
+}
+
 bool llCefBrowserManager::CopyLatestFrame(llCefBrowserHandle handle, std::vector<uint8_t>& dst, int& w, int& h)
 {
     return mImpl->CopyLatestFrame(handle, dst, w, h);

@@ -97,6 +97,17 @@ class llCefBrowserManager {
         // true forces an immediate blank frame at the new size instead.
         void ResizeBrowser(llCefBrowserHandle handle, int width, int height, bool clearImmediately = false);
 
+        // Requests a new compositor frame right now, rather than waiting for CEF's own
+        // windowless_frame_rate-paced internal timer -- that timer runs completely
+        // decoupled from when input actually arrives, so relying on it alone leaves
+        // every interaction waiting for CEF's own independently-scheduled next tick
+        // before any repaint even begins. Call this once per handle per your own
+        // update loop's tick (e.g. right after processing that tick's input) for
+        // input-driven rather than timer-driven repainting. A no-op unless the
+        // browser was created with windowlessFrameRate-independent external-begin-
+        // frame mode (always the case for browsers this library creates).
+        void SendExternalBeginFrame(llCefBrowserHandle handle);
+
         // Pulls the newest rendered frame (tightly-packed BGRA32) if one has
         // arrived since the last successful call. Returns false (dst
         // untouched) otherwise.
