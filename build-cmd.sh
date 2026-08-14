@@ -62,7 +62,7 @@ case "$AUTOBUILD_PLATFORM" in
         # FetchContent download (CEF_PACKAGE_DIR, not CEF_PACKAGE_URL --
         # both are already supported by the existing CMakeLists.txt)
         cd "$stage"
-        cmake "$top" \
+        cmake "$(cygpath -m "$top")" \
             -G "$AUTOBUILD_WIN_CMAKE_GEN" -A "$AUTOBUILD_WIN_VSPLATFORM" \
             -DCEF_PACKAGE_DIR="$(cygpath -m "$cef_no_wrapper_dir")" \
             -DCMAKE_CXX_FLAGS="$LL_BUILD_RELEASE" \
