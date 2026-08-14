@@ -2,3 +2,6 @@
 build
 include/llCefBrowserVersion.h
 .claude
+stage/
+*.tar.bz2
+*.tar.zst
