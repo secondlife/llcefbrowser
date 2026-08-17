@@ -266,6 +266,21 @@ namespace {
                     {
                         commandLine->AppendSwitch("no-proxy-server");
                     }
+
+                    if (mInitOptions.remoteDebuggingPort > 0)
+                    {
+                        // Chromium's DevTools frontend enforces an Origin check on its
+                        // remote-debugging WebSocket connections (a real fix, not specific
+                        // to us - see chromiumembedded/cef#3852 and the underlying Chromium
+                        // change). Without this, the DevTools HTML page itself loads fine at
+                        // http://localhost:<port>/... but every actual protocol message is
+                        // rejected, which is indistinguishable from the outside from "nothing
+                        // rendered" - a blank/black page, no error shown. "*" is fine here:
+                        // this only ever binds to localhost (CEF's remote_debugging_port has
+                        // no option to bind elsewhere), so it's not exposing anything over
+                        // the network that wasn't already reachable by anyone on this machine.
+                        commandLine->AppendSwitchWithValue("remote-allow-origins", "*");
+                    }
                 }
             }
 
