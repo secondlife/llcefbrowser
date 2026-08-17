@@ -232,26 +232,6 @@ namespace {
 
                 if (processType.empty())
                 {
-                    // Our own content is windowless/OSR and never touches the GPU
-                    // compositor (OnPaint delivers a plain software buffer, not a GPU
-                    // shared texture) - but ShowDevTools() opens a real, GPU-composited
-                    // native window, which is the first thing that actually exercises
-                    // that path. On at least one real machine tested, the GPU channel
-                    // was already failing silently from the very first browser created
-                    // ("Failed to create shared context for virtualization" in the GPU
-                    // process log) with no visible symptom until DevTools activated it,
-                    // at which point a repaint (e.g. from mouse movement) crashed/hung
-                    // the renderer - which the consumer then sees as a dead connection.
-                    // disable-gpu-compositing alone was tried first and confirmed NOT
-                    // sufficient (still crashed on the same repro) - matching Dullahan's
-                    // own default (dullahan.h's disable_gpu, on by default, applies both
-                    // of these together), both are needed. WebGL still renders via
-                    // Chromium's software (SwiftShader) fallback with the GPU fully
-                    // disabled this way - confirmed by Dullahan itself, which runs with
-                    // this same default and renders WebGL content fine.
-                    commandLine->AppendSwitch("disable-gpu");
-                    commandLine->AppendSwitch("disable-gpu-compositing");
-
                     // Chrome's own built-in login prompt UI intercepts HTTP auth challenges
                     // before CefRequestHandler::GetAuthCredentials ever gets a chance to
                     // run - a known CEF behavior (see chromiumembedded/cef#3603) that
