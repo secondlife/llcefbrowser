@@ -1143,20 +1143,6 @@ void llCefBrowser::ExecuteJavaScript(const std::string& code)
     }
 }
 
-void llCefBrowser::GetPageSource(std::function<void(const std::string&)> callback, size_t maxBytes)
-{
-    if (! mCefBrowser)
-    {
-        return;
-    }
-
-    CefRefPtr<CefFrame> frame = mCefBrowser->GetMainFrame();
-    if (frame)
-    {
-        frame->GetSource(new PageSourceVisitor(std::move(callback), maxBytes));
-    }
-}
-
 void llCefBrowser::CheckResizeWatchdog()
 {
     if (mPendingWidth < 0)

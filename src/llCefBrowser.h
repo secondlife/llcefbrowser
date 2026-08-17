@@ -493,13 +493,6 @@ class llCefBrowser : public CefClient,
 
         void ShowDevTools();
         void ExecuteJavaScript(const std::string& code);
-        // On-demand page source fetch, uncapped by default (maxBytes = npos) -- unlike
-        // mOnPageSourceRetrieved (which fires automatically on every main-frame load,
-        // truncated to mMaxSourceBytes), this fetches the current source once, whenever
-        // the caller actually wants it, capped independently if the caller passes a
-        // smaller maxBytes (e.g. to fit a fixed-size IPC buffer). Fire-and-forget: does
-        // nothing if there's no main frame right now.
-        void GetPageSource(std::function<void(const std::string&)> callback, size_t maxBytes = std::string::npos);
 
     private:
         llCefBrowserHandle mHandle;

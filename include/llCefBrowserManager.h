@@ -405,15 +405,6 @@ class llCefBrowserManager {
         // back.
         void ExecuteJavaScript(llCefBrowserHandle handle, const std::string& code);
 
-        // On-demand fetch of the browser's current main-frame page source, uncapped by
-        // default (maxBytes = npos) -- unlike SetOnPageSourceRetrievedCallback's
-        // automatic per-load hook above, which is always truncated. Pass a smaller
-        // maxBytes to cap it independently (e.g. to fit a fixed-size IPC buffer).
-        // callback fires exactly once, asynchronously; a no-op (callback never fires) if
-        // the browser doesn't exist or has no main frame right now.
-        void GetPageSource(llCefBrowserHandle handle, std::function<void(const std::string& source)> callback,
-                           size_t maxBytes = std::string::npos);
-
         size_t LiveBrowserCount() const;
 
         // Invokes fn(handle) once for every currently active browser. Use the

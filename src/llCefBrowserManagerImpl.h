@@ -133,7 +133,6 @@ class llCefBrowserManagerImpl {
         void SetFocus(llCefBrowserHandle handle, bool focus);
         void ShowDevTools(llCefBrowserHandle handle);
         void ExecuteJavaScript(llCefBrowserHandle handle, const std::string& code);
-        void GetPageSource(llCefBrowserHandle handle, std::function<void(const std::string&)> callback, size_t maxBytes);
 
         size_t LiveBrowserCount() const;
 
