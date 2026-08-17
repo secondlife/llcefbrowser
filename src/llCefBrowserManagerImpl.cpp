@@ -790,11 +790,11 @@ void llCefBrowserManagerImpl::ExecuteJavaScript(llCefBrowserHandle handle, const
     }
 }
 
-void llCefBrowserManagerImpl::GetPageSource(llCefBrowserHandle handle, std::function<void(const std::string&)> callback)
+void llCefBrowserManagerImpl::GetPageSource(llCefBrowserHandle handle, std::function<void(const std::string&)> callback, size_t maxBytes)
 {
     if (llCefBrowser* b = Get(handle))
     {
-        b->GetPageSource(std::move(callback));
+        b->GetPageSource(std::move(callback), maxBytes);
     }
 }
 
