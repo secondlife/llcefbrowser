@@ -1143,6 +1143,23 @@ void llCefBrowser::ExecuteJavaScript(const std::string& code)
     }
 }
 
+void llCefBrowser::GetPageSource(std::function<void(const std::string&)> callback)
+{
+    if (! mCefBrowser)
+    {
+        return;
+    }
+
+    CefRefPtr<CefFrame> frame = mCefBrowser->GetMainFrame();
+    if (frame)
+    {
+        // npos: PageSourceVisitor's own truncation check (source.size() > mMaxBytes) can
+        // never trigger, unlike the automatic per-load mOnPageSourceRetrieved hook above,
+        // which is deliberately capped -- this is an explicit, one-off, whole-source fetch.
+        frame->GetSource(new PageSourceVisitor(std::move(callback), std::string::npos));
+    }
+}
+
 void llCefBrowser::CheckResizeWatchdog()
 {
     if (mPendingWidth < 0)

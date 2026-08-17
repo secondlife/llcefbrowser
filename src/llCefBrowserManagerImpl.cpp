@@ -790,6 +790,14 @@ void llCefBrowserManagerImpl::ExecuteJavaScript(llCefBrowserHandle handle, const
     }
 }
 
+void llCefBrowserManagerImpl::GetPageSource(llCefBrowserHandle handle, std::function<void(const std::string&)> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->GetPageSource(std::move(callback));
+    }
+}
+
 size_t llCefBrowserManagerImpl::LiveBrowserCount() const
 {
     size_t count = 0;
