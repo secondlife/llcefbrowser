@@ -223,9 +223,9 @@ void llCefBrowserManager::SetPageZoom(llCefBrowserHandle handle, float zoomLevel
 
 void llCefBrowserManager::SetCookie(const std::string& url, const std::string& name, const std::string& value,
                                     const std::string& domain, const std::string& path, bool httpOnly, bool secure,
-                                    std::function<void(bool)> callback)
+                                    std::function<void(bool)> callback, bool alsoPrimContext)
 {
-    mImpl->SetCookie(url, name, value, domain, path, httpOnly, secure, std::move(callback));
+    mImpl->SetCookie(url, name, value, domain, path, httpOnly, secure, std::move(callback), alsoPrimContext);
 }
 
 void llCefBrowserManager::GetCookies(std::function<void(const std::vector<llCefCookie>&)> callback)

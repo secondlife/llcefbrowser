@@ -182,20 +182,22 @@ class llCefBrowserManager {
         // again yourself each time.
         void SetPageZoom(llCefBrowserHandle handle, float zoomLevel);
 
-        // Cookies belong to the UI context's cookie store specifically (see
-        // the constructor's uiCachePath and CreateBrowser's isUI) rather than
-        // to any individual browser, so these don't take a handle. There is
-        // deliberately no way to reach the prim context's cookie store
-        // through this API.
+        // Cookies belong to a context's cookie store specifically (see the
+        // constructor's uiCachePath/primCachePath and CreateBrowser's isUI)
+        // rather than to any individual browser, so these don't take a
+        // handle. GetCookies/DeleteAllCookies below only ever reach the UI
+        // store; SetCookie can optionally mirror into the prim store too -
+        // see its own comment.
 
-        // Sets a cookie on the UI store. Fire-and-forget by default;
-        // callback (optional) reports whether CEF actually accepted it - it
-        // can fail for a malformed URL or disallowed characters (e.g. ';' in
-        // the value). Always fires exactly once if provided, even when CEF
-        // rejects the request synchronously.
+        // Sets a cookie on the UI store, and -- only if alsoPrimContext is also true --
+        // additionally (best-effort, not reflected in callback) mirrors the same
+        // cookie into the prim store. Fire-and-forget by default; callback (optional)
+        // reports whether CEF actually accepted it on the UI store - it can fail for a
+        // malformed URL or disallowed characters (e.g. ';' in the value). Always fires
+        // exactly once if provided, even when CEF rejects the request synchronously.
         void SetCookie(const std::string& url, const std::string& name, const std::string& value,
                        const std::string& domain, const std::string& path, bool httpOnly, bool secure,
-                       std::function<void(bool success)> callback = nullptr);
+                       std::function<void(bool success)> callback = nullptr, bool alsoPrimContext = false);
 
         // Fetches every cookie in the shared store. Asynchronous - CEF's own
         // underlying API (VisitAllCookies) has no synchronous form. callback

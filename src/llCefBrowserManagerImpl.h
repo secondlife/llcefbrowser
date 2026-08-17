@@ -96,12 +96,13 @@ class llCefBrowserManagerImpl {
 
         void SetPageZoom(llCefBrowserHandle handle, float zoomLevel);
 
-        // Always targets the UI context specifically, never the prim one -
-        // see the class comment above. There is deliberately no way to set a
-        // cookie in the prim context through this API.
+        // Always targets the UI context. If alsoPrimContext is also true, the same
+        // cookie is additionally (best-effort, no separate reporting) mirrored into
+        // the prim context too - see the class comment above for why that's opt-in
+        // per call rather than the default.
         void SetCookie(const std::string& url, const std::string& name, const std::string& value,
                        const std::string& domain, const std::string& path, bool httpOnly, bool secure,
-                       std::function<void(bool)> callback);
+                       std::function<void(bool)> callback, bool alsoPrimContext = false);
         void GetCookies(std::function<void(const std::vector<llCefCookie>&)> callback);
         void DeleteAllCookies(std::function<void(int)> callback);
 

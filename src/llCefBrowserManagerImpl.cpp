@@ -481,8 +481,28 @@ void llCefBrowserManagerImpl::SetPageZoom(llCefBrowserHandle handle, float zoomL
 
 void llCefBrowserManagerImpl::SetCookie(const std::string& url, const std::string& name, const std::string& value,
                                         const std::string& domain, const std::string& path, bool httpOnly, bool secure,
-                                        std::function<void(bool)> callback)
+                                        std::function<void(bool)> callback, bool alsoPrimContext)
 {
+    // Mirrored into the prim context first, fire-and-forget (no separate callback -
+    // the one below still only ever reports the UI context's own result, matching
+    // this method's contract before alsoPrimContext existed). Deliberately opt-in
+    // per call rather than a second always-on context-wide default: callers decide
+    // per cookie whether it's fine to share with prim-hosted content.
+    if (alsoPrimContext && mPrimContext)
+    {
+        if (CefRefPtr<CefCookieManager> primCookieManager = mPrimContext->GetCookieManager(nullptr))
+        {
+            CefCookie primCookie;
+            CefString(&primCookie.name).FromString(name);
+            CefString(&primCookie.value).FromString(value);
+            CefString(&primCookie.domain).FromString(domain);
+            CefString(&primCookie.path).FromString(path);
+            primCookie.httponly = httpOnly ? 1 : 0;
+            primCookie.secure = secure ? 1 : 0;
+            primCookieManager->SetCookie(url, primCookie, nullptr);
+        }
+    }
+
     CefRefPtr<CefCookieManager> cookieManager = mUIContext ? mUIContext->GetCookieManager(nullptr) : nullptr;
     if (! cookieManager)
     {
