@@ -242,9 +242,14 @@ namespace {
                     // process log) with no visible symptom until DevTools activated it,
                     // at which point a repaint (e.g. from mouse movement) crashed/hung
                     // the renderer - which the consumer then sees as a dead connection.
-                    // This disables GPU-accelerated window *compositing* specifically,
-                    // not the GPU process/context WebGL uses (a separate Chromium
-                    // subsystem), so WebGL content should be unaffected.
+                    // disable-gpu-compositing alone was tried first and confirmed NOT
+                    // sufficient (still crashed on the same repro) - matching Dullahan's
+                    // own default (dullahan.h's disable_gpu, on by default, applies both
+                    // of these together), both are needed. WebGL still renders via
+                    // Chromium's software (SwiftShader) fallback with the GPU fully
+                    // disabled this way - confirmed by Dullahan itself, which runs with
+                    // this same default and renders WebGL content fine.
+                    commandLine->AppendSwitch("disable-gpu");
                     commandLine->AppendSwitch("disable-gpu-compositing");
 
                     // Chrome's own built-in login prompt UI intercepts HTTP auth challenges
