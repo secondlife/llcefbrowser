@@ -93,6 +93,7 @@ class llCefBrowser : public CefClient,
 
         // --- CefRenderHandler ---
         void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+        bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override;
         void OnPaint(CefRefPtr<CefBrowser> browser,
                      PaintElementType type,
                      const RectList& dirtyRects,

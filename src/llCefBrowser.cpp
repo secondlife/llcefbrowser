@@ -78,6 +78,24 @@ void llCefBrowser::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect)
     rect = CefRect(0, 0, mWidth > 0 ? mWidth : 1, mHeight > 0 ? mHeight : 1);
 }
 
+bool llCefBrowser::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info)
+{
+    CEF_REQUIRE_UI_THREAD();
+    // Without this, CEF falls back to querying the OS's own display DPI for
+    // device_scale_factor. GetViewRect() below already reports the exact
+    // pixel size the caller wants OnPaint() to deliver (any app-level UI
+    // scale is already baked into mWidth/mHeight by the time it gets here) -
+    // on any machine where the OS's own scale isn't exactly 1.0, CEF would
+    // otherwise deliver OnPaint buffers at mWidth/mHeight * that OS scale,
+    // which never matches CheckResizeWatchdog()'s mPendingWidth/mPendingHeight,
+    // so the resize confirmation is missed and it retries forever - a
+    // permanent, visible flicker every 500ms.
+    screen_info.device_scale_factor = 1.0f;
+    screen_info.rect = CefRect(0, 0, mWidth > 0 ? mWidth : 1, mHeight > 0 ? mHeight : 1);
+    screen_info.available_rect = screen_info.rect;
+    return true;
+}
+
 void llCefBrowser::OnPaint(CefRefPtr<CefBrowser> browser,
                            PaintElementType type,
                            const RectList& dirtyRects,
