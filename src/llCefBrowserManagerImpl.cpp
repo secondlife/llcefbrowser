@@ -98,19 +98,28 @@ namespace {
 
 }  // namespace
 
-llCefBrowserManagerImpl::llCefBrowserManagerImpl(const std::string& cachePath)
-    : mCachePath(cachePath)
+llCefBrowserManagerImpl::llCefBrowserManagerImpl(const std::string& uiCachePath, const std::string& primCachePath)
+    : mCachePath(uiCachePath)
 {
-    CefRequestContextSettings settings;
-    if (! cachePath.empty())
+    // Two independent CefRequestContexts, each with its own on-disk cache /
+    // cookie jar -- see the class comment in the header for why. All browsers
+    // created through this manager for a given isUI value share that one
+    // context, same as the old single-context design did for everything.
+    CefRequestContextSettings uiSettings;
+    if (! uiCachePath.empty())
     {
-        CefString(&settings.cache_path).FromString(cachePath);
+        CefString(&uiSettings.cache_path).FromString(uiCachePath);
     }
-    // All browsers created through this manager are handed the same
-    // CefRequestContext instance below, which is what makes them share one
-    // cache/cookie store instead of each getting an isolated one.
-    mSharedContext = CefRequestContext::CreateContext(settings, nullptr);
-    DCHECK(mSharedContext);
+    mUIContext = CefRequestContext::CreateContext(uiSettings, nullptr);
+    DCHECK(mUIContext);
+
+    CefRequestContextSettings primSettings;
+    if (! primCachePath.empty())
+    {
+        CefString(&primSettings.cache_path).FromString(primCachePath);
+    }
+    mPrimContext = CefRequestContext::CreateContext(primSettings, nullptr);
+    DCHECK(mPrimContext);
 }
 
 const std::string& llCefBrowserManagerImpl::GetCachePath() const
@@ -131,7 +140,7 @@ llCefBrowserManagerImpl::~llCefBrowserManagerImpl()
     }
 }
 
-llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url, int width, int height)
+llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url, int width, int height, bool isUI)
 {
     CEF_REQUIRE_UI_THREAD();
 
@@ -182,7 +191,7 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     browserSettings.webgl = LLToCefState(options.webgl);
 
     if (! CefBrowserHost::CreateBrowser(windowInfo, browserClient, url,
-                                        browserSettings, nullptr, mSharedContext))
+                                        browserSettings, nullptr, isUI ? mUIContext : mPrimContext))
     {
         // Failed synchronously -- OnAfterCreated will never fire for this
         // browser, so the normal OnBeforeClose -> NotifyBrowserClosed path
@@ -474,7 +483,7 @@ void llCefBrowserManagerImpl::SetCookie(const std::string& url, const std::strin
                                         const std::string& domain, const std::string& path, bool httpOnly, bool secure,
                                         std::function<void(bool)> callback)
 {
-    CefRefPtr<CefCookieManager> cookieManager = mSharedContext ? mSharedContext->GetCookieManager(nullptr) : nullptr;
+    CefRefPtr<CefCookieManager> cookieManager = mUIContext ? mUIContext->GetCookieManager(nullptr) : nullptr;
     if (! cookieManager)
     {
         if (callback)
@@ -513,7 +522,7 @@ void llCefBrowserManagerImpl::GetCookies(std::function<void(const std::vector<ll
         return;
     }
 
-    CefRefPtr<CefCookieManager> cookieManager = mSharedContext ? mSharedContext->GetCookieManager(nullptr) : nullptr;
+    CefRefPtr<CefCookieManager> cookieManager = mUIContext ? mUIContext->GetCookieManager(nullptr) : nullptr;
     if (! cookieManager)
     {
         callback({});
@@ -531,7 +540,7 @@ void llCefBrowserManagerImpl::GetCookies(std::function<void(const std::vector<ll
 
 void llCefBrowserManagerImpl::DeleteAllCookies(std::function<void(int)> callback)
 {
-    CefRefPtr<CefCookieManager> cookieManager = mSharedContext ? mSharedContext->GetCookieManager(nullptr) : nullptr;
+    CefRefPtr<CefCookieManager> cookieManager = mUIContext ? mUIContext->GetCookieManager(nullptr) : nullptr;
     if (! cookieManager)
     {
         if (callback)

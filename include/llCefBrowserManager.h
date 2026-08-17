@@ -38,10 +38,14 @@
 // confined to this library's own .cpp files via the pimpl pattern below.
 class llCefBrowserManager {
     public:
-        // cachePath: shared cache directory used by every browser this manager
-        // creates. Pass an empty string for an in-memory-only, non-persistent
-        // shared context.
-        explicit llCefBrowserManager(const std::string& cachePath);
+        // uiCachePath/primCachePath: two independent cache directories, each
+        // backing its own CefRequestContext (and therefore its own cookie
+        // jar) - see CreateBrowser's own comment for why. Pass an empty
+        // string for either to make that context in-memory-only/non-
+        // persistent; pass the same path for both if the isolation doesn't
+        // matter to your application (every browser then behaves as under
+        // the old single-context design).
+        llCefBrowserManager(const std::string& uiCachePath, const std::string& primCachePath);
         ~llCefBrowserManager();
 
         llCefBrowserManager(const llCefBrowserManager&) = delete;
@@ -50,8 +54,13 @@ class llCefBrowserManager {
         // Must be called on the CEF UI thread (the main thread, in
         // single-threaded-message-loop mode, alongside llCefBrowserLib::
         // DoMessageLoopWork()). Returns a handle immediately; the real browser
-        // is created asynchronously underneath.
-        llCefBrowserHandle CreateBrowser(const std::string& url, int width, int height);
+        // is created asynchronously underneath. isUI selects which of the two
+        // cache/cookie contexts this browser uses: true for 2D floater/UI
+        // media, false for in-world/prim media -- keeps a cookie set on one
+        // (e.g. the Viewer's OpenID login cookie, via SetCookie()) invisible
+        // to the other, since prim-hosted content may be controlled by an
+        // untrusted third party.
+        llCefBrowserHandle CreateBrowser(const std::string& url, int width, int height, bool isUI = true);
 
         // Requests destruction. Safe to call rapidly and repeatedly.
         void DestroyBrowser(llCefBrowserHandle handle);
@@ -173,11 +182,13 @@ class llCefBrowserManager {
         // again yourself each time.
         void SetPageZoom(llCefBrowserHandle handle, float zoomLevel);
 
-        // Cookies belong to the shared cookie store used by every browser
-        // this manager creates (see the constructor's cachePath) rather than
-        // to any individual browser, so these don't take a handle.
+        // Cookies belong to the UI context's cookie store specifically (see
+        // the constructor's uiCachePath and CreateBrowser's isUI) rather than
+        // to any individual browser, so these don't take a handle. There is
+        // deliberately no way to reach the prim context's cookie store
+        // through this API.
 
-        // Sets a cookie on the shared store. Fire-and-forget by default;
+        // Sets a cookie on the UI store. Fire-and-forget by default;
         // callback (optional) reports whether CEF actually accepted it - it
         // can fail for a malformed URL or disallowed characters (e.g. ';' in
         // the value). Always fires exactly once if provided, even when CEF

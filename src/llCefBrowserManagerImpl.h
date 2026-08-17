@@ -35,16 +35,24 @@
 
 // Internal implementation behind llCefBrowserManager's public pimpl
 // interface. Never included by consuming applications - owns every
-// offscreen browser created through it and one shared CefRequestContext,
-// so all browsers share a single on-disk cache / cookie jar. Designed for
-// rapid create/destroy churn: handles are (index, generation) pairs into a
+// offscreen browser created through it and TWO CefRequestContexts (each
+// with its own on-disk cache / cookie jar): a "UI" one, for browsers backing
+// 2D floater/UI media, and a "prim" one, for browsers backing in-world
+// (MOAP/parcel/prim) media. Deliberately separate stores - see CreateBrowser
+// and SetCookie's own comments - so a cookie (e.g. the Viewer's OpenID
+// login cookie) set on the UI store is never visible to prim-hosted content,
+// which may be controlled by an untrusted third party. Designed for rapid
+// create/destroy churn: handles are (index, generation) pairs into a
 // recycled slot vector.
 class llCefBrowserManagerImpl {
     public:
-        explicit llCefBrowserManagerImpl(const std::string& cachePath);
+        llCefBrowserManagerImpl(const std::string& uiCachePath, const std::string& primCachePath);
         ~llCefBrowserManagerImpl();
 
-        llCefBrowserHandle CreateBrowser(const std::string& url, int width, int height);
+        // isUI selects which CefRequestContext (and therefore which cookie
+        // store) the new browser uses - see the class comment above. Pass
+        // true for 2D floater/UI media, false for in-world/prim media.
+        llCefBrowserHandle CreateBrowser(const std::string& url, int width, int height, bool isUI);
         void DestroyBrowser(llCefBrowserHandle handle);
         bool DestroyLastBrowser();
         void DestroyAll();
@@ -56,8 +64,8 @@ class llCefBrowserManagerImpl {
         void SetUserData(llCefBrowserHandle handle, void* userData);
         void* GetUserData(llCefBrowserHandle handle);
 
-        // The cache directory this manager was constructed with, exactly as
-        // passed to the constructor (empty for in-memory-only mode).
+        // The UI-context cache directory this manager was constructed with,
+        // exactly as passed to the constructor (empty for in-memory-only mode).
         const std::string& GetCachePath() const;
 
         int GetWidth(llCefBrowserHandle handle) const;
@@ -88,6 +96,9 @@ class llCefBrowserManagerImpl {
 
         void SetPageZoom(llCefBrowserHandle handle, float zoomLevel);
 
+        // Always targets the UI context specifically, never the prim one -
+        // see the class comment above. There is deliberately no way to set a
+        // cookie in the prim context through this API.
         void SetCookie(const std::string& url, const std::string& name, const std::string& value,
                        const std::string& domain, const std::string& path, bool httpOnly, bool secure,
                        std::function<void(bool)> callback);
@@ -143,7 +154,8 @@ class llCefBrowserManagerImpl {
             bool mClosing = false;
         };
 
-        CefRefPtr<CefRequestContext> mSharedContext;
+        CefRefPtr<CefRequestContext> mUIContext;
+        CefRefPtr<CefRequestContext> mPrimContext;
         std::vector<Slot> mSlots;
         std::vector<uint32_t> mFreeList;
         std::string mCachePath;

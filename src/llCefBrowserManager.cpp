@@ -36,17 +36,17 @@ class llCefBrowserManager::Impl : public llCefBrowserManagerImpl {
         using llCefBrowserManagerImpl::llCefBrowserManagerImpl;
 };
 
-llCefBrowserManager::llCefBrowserManager(const std::string& cachePath)
-    : mImpl(std::make_unique<Impl>(cachePath)) {}
+llCefBrowserManager::llCefBrowserManager(const std::string& uiCachePath, const std::string& primCachePath)
+    : mImpl(std::make_unique<Impl>(uiCachePath, primCachePath)) {}
 
 // Out-of-line, needed because Impl is an incomplete type in the header -
 // std::unique_ptr<Impl>'s default destructor would otherwise require the
 // complete type at every call site that includes llCefBrowserManager.h.
 llCefBrowserManager::~llCefBrowserManager() = default;
 
-llCefBrowserHandle llCefBrowserManager::CreateBrowser(const std::string& url, int width, int height)
+llCefBrowserHandle llCefBrowserManager::CreateBrowser(const std::string& url, int width, int height, bool isUI)
 {
-    return mImpl->CreateBrowser(url, width, height);
+    return mImpl->CreateBrowser(url, width, height, isUI);
 }
 
 void llCefBrowserManager::DestroyBrowser(llCefBrowserHandle handle)

@@ -724,8 +724,9 @@ void multipleBrowsers::init()
 
     initGLFWCallbacks();
 
-    // one cache for all browsers
-    mCefBrowserManager = std::make_unique<llCefBrowserManager>(default_cache_path.string());
+    // one cache for all browsers -- this example doesn't care about the UI-
+    // vs-prim cookie isolation, so use the same path for both contexts
+    mCefBrowserManager = std::make_unique<llCefBrowserManager>(default_cache_path.string(), default_cache_path.string());
 
     // Start with one browser tab, the home page.
     createBrowserTab(mHomeUrl, mDefaultBrowserWidth, mDefaultBrowserHeight);
