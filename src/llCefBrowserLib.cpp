@@ -232,6 +232,18 @@ namespace {
 
                 if (processType.empty())
                 {
+                    // CEF's Chrome-runtime opens its own default browser window at startup
+                    // unless told not to - harmless with a single CefRequestContext (it's a
+                    // normal "Default" profile, so nothing visibly goes wrong), but adding a
+                    // second one (see llCefBrowserManagerImpl's uiContext/primContext split)
+                    // gave Chrome's own profile manager two profiles to pick from at startup,
+                    // and it picked the wrong one - "Requested load of chrome://newtab/ for
+                    // incorrect profile type", followed by a real, visible native Chrome
+                    // window. This app creates every browser itself via CreateBrowser(); tell
+                    // Chrome-runtime not to create one of its own at all, regardless of how
+                    // many contexts/profiles exist.
+                    commandLine->AppendSwitch("no-startup-window");
+
                     // Chrome's own built-in login prompt UI intercepts HTTP auth challenges
                     // before CefRequestHandler::GetAuthCredentials ever gets a chance to
                     // run - a known CEF behavior (see chromiumembedded/cef#3603) that
