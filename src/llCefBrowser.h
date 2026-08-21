@@ -491,6 +491,13 @@ class llCefBrowser : public CefClient,
 
         void SetFocus(bool focus);
 
+        // Binary mute/unmute of this browser's audio output -- see
+        // CefBrowserHost::SetAudioMuted()'s own doc comment. There is no
+        // continuous volume level in CEF's public API (audio mixing happens
+        // inside Chromium's own audio service, not exposed as a per-browser
+        // gain multiplier), so this is on/off only.
+        void SetAudioMuted(bool mute);
+
         void ShowDevTools();
         void ExecuteJavaScript(const std::string& code);
 

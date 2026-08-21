@@ -358,6 +358,11 @@ void llCefBrowserManager::SetFocus(llCefBrowserHandle handle, bool focus)
     mImpl->SetFocus(handle, focus);
 }
 
+void llCefBrowserManager::SetAudioMuted(llCefBrowserHandle handle, bool mute)
+{
+    mImpl->SetAudioMuted(handle, mute);
+}
+
 void llCefBrowserManager::ShowDevTools(llCefBrowserHandle handle)
 {
     mImpl->ShowDevTools(handle);

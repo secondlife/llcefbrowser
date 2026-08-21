@@ -393,6 +393,12 @@ class llCefBrowserManager {
         // sending it key events.
         void SetFocus(llCefBrowserHandle handle, bool focus);
 
+        // Binary mute/unmute of this browser's audio output. There is no
+        // continuous volume level in CEF's public API - audio mixing happens
+        // inside Chromium's own audio service, not exposed to the embedder as
+        // a per-browser gain multiplier - so this is on/off only, not a dial.
+        void SetAudioMuted(llCefBrowserHandle handle, bool mute);
+
         // Opens the CEF DevTools in their own separate, ordinarily-rendered
         // native window (not routed through this browser's offscreen texture).
         // A no-op if the browser doesn't exist yet or DevTools are already open

@@ -774,6 +774,14 @@ void llCefBrowserManagerImpl::SetFocus(llCefBrowserHandle handle, bool focus)
     }
 }
 
+void llCefBrowserManagerImpl::SetAudioMuted(llCefBrowserHandle handle, bool mute)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetAudioMuted(mute);
+    }
+}
+
 void llCefBrowserManagerImpl::ShowDevTools(llCefBrowserHandle handle)
 {
     if (llCefBrowser* b = Get(handle))

@@ -1107,6 +1107,15 @@ void llCefBrowser::SetFocus(bool focus)
     mCefBrowser->GetHost()->SetFocus(focus);
 }
 
+void llCefBrowser::SetAudioMuted(bool mute)
+{
+    if (! mCefBrowser)
+    {
+        return;
+    }
+    mCefBrowser->GetHost()->SetAudioMuted(mute);
+}
+
 void llCefBrowser::ShowDevTools()
 {
     if (! mCefBrowser)

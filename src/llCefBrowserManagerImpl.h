@@ -131,6 +131,7 @@ class llCefBrowserManagerImpl {
         void SendMouseWheelEvent(llCefBrowserHandle handle, int x, int y, int deltaY);
         void SendKeyEvent(llCefBrowserHandle handle, uint32_t message, uint64_t wParam, int64_t lParam);
         void SetFocus(llCefBrowserHandle handle, bool focus);
+        void SetAudioMuted(llCefBrowserHandle handle, bool mute);
         void ShowDevTools(llCefBrowserHandle handle);
         void ExecuteJavaScript(llCefBrowserHandle handle, const std::string& code);
 
