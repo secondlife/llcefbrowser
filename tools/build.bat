@@ -6,9 +6,15 @@
 @rem Note: let's not make the build directory a variable with this line in play - just in case...
 if exist build rmdir build /s /q
 
-@rem Note: CEF packages canbe found at the Spotify Automated Builds site here: https://cef-builds.spotifycdn.com/index.html
-@rem A batch file restriction means you must replace the % signs in the original url with %%
-set CEF_MINIMAL_URL=https://cef-builds.spotifycdn.com/cef_binary_150.0.17%%2Bg94c1726%%2Bchromium-150.0.7871.187_windows64_minimal.tar.bz2
+@rem Same internally-built, media-codec-enabled CEF package autobuild.xml's
+@rem own cef-bin installable points at (see that file) -- built by hand
+@rem (too slow/resource-heavy for GitHub CI) and uploaded once to this URL,
+@rem which both this project and secondlife/dullahan consume from. A plain
+@rem Spotify Automated Builds package (https://cef-builds.spotifycdn.com/)
+@rem works here too if you just need a quick local build and don't care
+@rem about codec support, but then this local dev build no longer matches
+@rem what actually ships.
+set CEF_MINIMAL_URL=https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-150.0.11_gb887805_chromium-150.0.7871.115-windows64-261901728.tar.zst
 
 cmake -B build -G "Visual Studio 17 2022" -A x64  -DCEF_RUNTIME_LIBRARY_FLAG=/MD -DUSE_SANDBOX=OFF -DCEF_PACKAGE_URL=%CEF_MINIMAL_URL%
 cmake --build build --config Release

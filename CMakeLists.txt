@@ -29,8 +29,38 @@ elseif(DEFINED CEF_PACKAGE_DIR)
 endif()
 fetchcontent_makeavailable(cef_prebuild)
 
-set(CEF_ROOT "${cef_prebuild_SOURCE_DIR}")
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${cef_prebuild_SOURCE_DIR}/cmake")
+# A Spotify Automated Builds package (CEF_PACKAGE_URL's usual source) has
+# cmake/, include/, etc. directly at its archive root. The internally-built,
+# media-codec-enabled package (both CEF_PACKAGE_URL and CEF_PACKAGE_DIR can
+# point at this one -- see tools/build.bat and autobuild.xml) nests all of
+# that one level deeper, under a "cef" subdirectory instead, which is what
+# build-cmd.sh's own -DCEF_PACKAGE_DIR=.../packages/cef already compensates
+# for by pointing directly at that subdirectory. CEF_PACKAGE_URL has no
+# equivalent chance to compensate ahead of time, so detect which layout was
+# actually unpacked here instead of hard-coding one.
+if(EXISTS "${cef_prebuild_SOURCE_DIR}/cmake")
+  # Flat layout: fetchcontent_makeavailable() above already found this same
+  # directory's own top-level CMakeLists.txt and add_subdirectory()'d it
+  # automatically, which is what defines the libcef_dll_wrapper target,
+  # with its own binary dir directly under cef_prebuild_BINARY_DIR.
+  set(CEF_ROOT "${cef_prebuild_SOURCE_DIR}")
+  set(CEF_WRAPPER_BINARY_DIR "${cef_prebuild_BINARY_DIR}")
+elseif(EXISTS "${cef_prebuild_SOURCE_DIR}/cef/cmake")
+  # Nested layout: CEF's own CMakeLists.txt (and therefore the
+  # libcef_dll_wrapper target it defines) lives one level down from where
+  # fetchcontent_makeavailable() automatically looked, so its automatic
+  # add_subdirectory() found nothing there and silently added nothing.
+  # Do it explicitly ourselves instead, now that we know the real location --
+  # its binary dir ends up one level down too, to match.
+  set(CEF_ROOT "${cef_prebuild_SOURCE_DIR}/cef")
+  set(CEF_WRAPPER_BINARY_DIR "${cef_prebuild_BINARY_DIR}/cef")
+  add_subdirectory("${CEF_ROOT}" "${CEF_WRAPPER_BINARY_DIR}")
+else()
+  message(FATAL_ERROR "Could not find CEF's cmake/ directory under either "
+    "${cef_prebuild_SOURCE_DIR} or ${cef_prebuild_SOURCE_DIR}/cef -- "
+    "unrecognized CEF package layout")
+endif()
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 
 # ==============================================================================
@@ -71,14 +101,14 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    "${cef_prebuild_SOURCE_DIR}/include"
-    "${cef_prebuild_SOURCE_DIR}/include/.."
+    "${CEF_ROOT}/include"
+    "${CEF_ROOT}/include/.."
 )
 
 target_link_libraries(
   llcefbrowser
-  "${cef_prebuild_SOURCE_DIR}/Release/libcef.lib"
-  "${cef_prebuild_BINARY_DIR}/libcef_dll_wrapper/Release/libcef_dll_wrapper.lib"
+  "${CEF_ROOT}/Release/libcef.lib"
+  "${CEF_WRAPPER_BINARY_DIR}/libcef_dll_wrapper/Release/libcef_dll_wrapper.lib"
 )
 
 # Required for C++20 compatibility in CEF
@@ -97,28 +127,28 @@ source_group("src" FILES ${LLCEFBROWSER_SRCS})
 # version numbers along with some git params for the library version
 #
 file(REMOVE "${PROJECT_SOURCE_DIR}/include/llCefBrowserVersion.h")
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CEF_VERSION_MAJOR_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CEF_VERSION_MAJOR_STR
      REGEX "\#define CEF_VERSION_MAJOR "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CEF_VERSION_MINOR_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CEF_VERSION_MINOR_STR
      REGEX "\#define CEF_VERSION_MINOR "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CEF_VERSION_BUILD_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CEF_VERSION_BUILD_STR
      REGEX "\#define CEF_VERSION_BUILD "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CEF_VERSION_PATCH_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CEF_VERSION_PATCH_STR
      REGEX "\#define CEF_VERSION_PATCH "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CHROME_VERSION_MAJOR_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CHROME_VERSION_MAJOR_STR
      REGEX "\#define CHROME_VERSION_MAJOR "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CHROME_VERSION_MINOR_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CHROME_VERSION_MINOR_STR
      REGEX "\#define CHROME_VERSION_MINOR "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CHROME_VERSION_BUILD_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CHROME_VERSION_BUILD_STR
      REGEX "\#define CHROME_VERSION_BUILD "
 )
-file(STRINGS ${cef_prebuild_SOURCE_DIR}/include/cef_version.h CHROME_VERSION_PATCH_STR
+file(STRINGS ${CEF_ROOT}/include/cef_version.h CHROME_VERSION_PATCH_STR
      REGEX "\#define CHROME_VERSION_PATCH "
 )
 execute_process(
@@ -238,12 +268,12 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   set(DESTINATION_DIR "${CMAKE_BINARY_DIR}/Release")
   file(MAKE_DIRECTORY "${DESTINATION_DIR}")
   foreach(file_path IN LISTS CEF_BINARY_FILES)
-    set(SOURCE_FILE "${cef_prebuild_SOURCE_DIR}/Release/${file_path}")
+    set(SOURCE_FILE "${CEF_ROOT}/Release/${file_path}")
     file(COPY "${SOURCE_FILE}" DESTINATION "${DESTINATION_DIR}")
   endforeach()
   set(DESTINATION_DIR "${CMAKE_BINARY_DIR}/Release")
   foreach(file_path IN LISTS CEF_RESOURCE_FILES)
-    set(SOURCE_FILE "${cef_prebuild_SOURCE_DIR}/Resources/${file_path}")
+    set(SOURCE_FILE "${CEF_ROOT}/Resources/${file_path}")
     file(COPY "${SOURCE_FILE}" DESTINATION "${DESTINATION_DIR}")
   endforeach()
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
