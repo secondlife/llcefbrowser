@@ -110,11 +110,18 @@ class llCefBrowserManager {
         // windowless_frame_rate-paced internal timer -- that timer runs completely
         // decoupled from when input actually arrives, so relying on it alone leaves
         // every interaction waiting for CEF's own independently-scheduled next tick
-        // before any repaint even begins. Call this once per handle per your own
-        // update loop's tick (e.g. right after processing that tick's input) for
-        // input-driven rather than timer-driven repainting. A no-op unless the
-        // browser was created with windowlessFrameRate-independent external-begin-
-        // frame mode (always the case for browsers this library creates).
+        // before any repaint even begins. A no-op unless the browser was created with
+        // windowlessFrameRate-independent external-begin-frame mode (always the case
+        // for browsers this library creates).
+        //
+        // Tick() already calls this for every live handle every tick, as a mandatory
+        // baseline -- you do NOT need to call this yourself just to get a browser to
+        // render at all. Call it yourself, in addition, only when you want a repaint
+        // sooner than wherever in your own loop Tick() happens to run -- typically
+        // right after processing that tick's input, for lower-latency input-driven
+        // repainting (see SLCefProducer.cpp's own call site) rather than
+        // Tick()-cadence repainting. Idempotent: calling it twice in the same tick is
+        // harmless.
         void SendExternalBeginFrame(llCefBrowserHandle handle);
 
         // Pulls the newest rendered frame (tightly-packed BGRA32) if one has

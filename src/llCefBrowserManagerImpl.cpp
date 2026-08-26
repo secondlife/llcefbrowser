@@ -834,6 +834,24 @@ void llCefBrowserManagerImpl::Tick()
         if (slot.mBrowser && ! slot.mClosing)
         {
             slot.mBrowser->CheckResizeWatchdog();
+
+            // Every browser this manager creates uses external-begin-frame
+            // mode (see CreateBrowser()), so CEF never composites a frame on
+            // its own timer at all -- this pump is required every tick or
+            // nothing ever renders, silently (no error, no callback, just a
+            // permanently black view). This is a mandatory safety-net
+            // baseline, folded in here because Tick() is already
+            // unconditionally called every tick by everything that uses this
+            // library -- unlike the public SendExternalBeginFrame(handle)
+            // below, which is easy to simply forget to call at all (three
+            // separate callers did, silently, before this). Calling it a
+            // second time from here when a caller also calls it explicitly
+            // is harmless (SendExternalBeginFrame() is idempotent) -- an
+            // explicit call right after processing that tick's input is
+            // still worth keeping for latency (see SLCefProducer.cpp's own
+            // call site): it repaints immediately rather than waiting for
+            // wherever in the caller's own loop Tick() happens to run.
+            slot.mBrowser->SendExternalBeginFrame();
         }
     }
 }
