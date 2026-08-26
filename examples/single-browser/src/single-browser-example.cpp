@@ -461,6 +461,12 @@ void singleBrowser::update()
     llCefBrowserLib::DoMessageLoopWork();
     mCefBrowserManager->Tick();
 
+    // Required every tick -- CreateBrowser() always uses external-begin-frame
+    // mode now (see SendExternalBeginFrame()'s own doc comment), so without
+    // this CEF never composites a frame at all: no error, no OnPageChanged
+    // callback either, just a permanently black window.
+    mCefBrowserManager->SendExternalBeginFrame(mCefBrowser);
+
     if (mPageChanged)
     {
         mPageChanged = false;

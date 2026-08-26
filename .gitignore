@@ -5,3 +5,4 @@ include/llCefBrowserVersion.h
 stage/
 *.tar.bz2
 *.tar.zst
+imgui.ini
