@@ -169,6 +169,15 @@ configure_file(
 # ==============================================================================
 # Example applications - common
 #
+# Off by default for a parent project that add_subdirectory()'s this repo
+# just to reuse llcefbrowser itself (or, like llcefshm-example, just its
+# vendored third-party sources) -- these two apps are standalone, in-process
+# demos with no shared-memory transport at all, unrelated to and not runnable
+# from within a parent project's own solution. Mirrors llshmframe's own
+# LLSHMFRAME_BUILD_EXAMPLES option.
+option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" ON)
+if(LLCEFBROWSER_BUILD_EXAMPLES)
+
 # CMAKE_CURRENT_SOURCE_DIR, not CMAKE_SOURCE_DIR: this must resolve relative
 # to this file even when llcefbrowser is add_subdirectory()'d from a parent
 # project, not just when it's the top-level project itself.
@@ -261,8 +270,15 @@ source_group(
   ${LLCEFBROWSER_EXAMPLES_THIRD_PARTY_FILES}
 )
 
+endif() # LLCEFBROWSER_BUILD_EXAMPLES
+
 # ==============================================================================
 # Copy necessary runtime files
+#
+# Unconditional, not inside the option guard above -- needed by any consumer
+# of this library's runtime (llcefshm-example's own cefshm_producer.exe,
+# the Viewer's SLCefProducer.exe, not just the two example apps), all of
+# which rely on this same unconditional-per-target default output location.
 #
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   set(DESTINATION_DIR "${CMAKE_BINARY_DIR}/Release")
