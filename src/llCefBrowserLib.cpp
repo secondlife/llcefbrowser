@@ -267,6 +267,22 @@ namespace {
                     // interacted with
                     commandLine->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
 
+                    // WebRTC's local-IP-hiding privacy feature (on by default) obfuscates a
+                    // page's real local IP during ICE candidate gathering by minting a random
+                    // ".local" mDNS hostname and binding a UDP socket (mDNS, typically port
+                    // 5353) to answer queries for it - the first time any page negotiates a
+                    // WebRTC connection (voice/video chat, etc.), that bind triggers a one-time
+                    // Windows Firewall "allow this app on public/private networks?" prompt, with
+                    // no relation to code signing or this app's own network usage. This is a
+                    // known, common Chromium/CEF-wide behavior, not specific to us - see
+                    // https://issues.chromium.org/issues/40078674 and the CEF forum thread
+                    // "how to disable enable-webrtc-hide-local-ips-with-mdns". Disabling it here
+                    // means real local IPs are exposed to the remote peer during ICE negotiation
+                    // instead of mDNS-obfuscated - an acceptable tradeoff for a windowless
+                    // embedded browser with no user-facing privacy UI of its own to explain the
+                    // firewall prompt otherwise.
+                    commandLine->AppendSwitchWithValue("disable-features", "WebRtcHideLocalIpsWithMdns");
+
                     // Fixed for the process lifetime -- mInitOptions is already
                     // populated here since Initialize() sets it before calling
                     // CefInitialize(), which is what triggers this callback.
