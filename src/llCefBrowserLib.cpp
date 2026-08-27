@@ -283,6 +283,17 @@ namespace {
                     // firewall prompt otherwise.
                     commandLine->AppendSwitchWithValue("disable-features", "WebRtcHideLocalIpsWithMdns");
 
+                    // Stop background "phone home" network traffic this embedding has no
+                    // use for: periodic component-update checks (e.g. Widevine CDM) against
+                    // update.googleapis.com, and the Safe Browsing hash-prefix list's own
+                    // separate auto-update/client-side-phishing-detection network calls. Real,
+                    // purpose-built switches rather than base::Feature names deliberately -
+                    // Safe Browsing is gated by a profile pref, not a Feature, so
+                    // "--disable-features=SafeBrowsing" would silently be a no-op.
+                    commandLine->AppendSwitch("disable-component-update");
+                    commandLine->AppendSwitch("safebrowsing-disable-auto-update");
+                    commandLine->AppendSwitch("disable-client-side-phishing-detection");
+
                     // Fixed for the process lifetime -- mInitOptions is already
                     // populated here since Initialize() sets it before calling
                     // CefInitialize(), which is what triggers this callback.
