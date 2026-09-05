@@ -74,23 +74,33 @@ case "$AUTOBUILD_PLATFORM" in
         cd "$top"
         mkdir -p "$stage/include/llcefbrowser"
         mkdir -p "$stage/lib/release"
+        mkdir -p "$stage/bin/release"
+        mkdir -p "$stage/resources/locales"
         mkdir -p "$stage/LICENSES"
 
         # llcefbrowser's own public headers
         cp "$top/include/"*.h "$stage/include/llcefbrowser/"
 
-        # llcefbrowser's own library only. Deliberately NOT staging/packaging
-        # libcef.lib/libcef_dll_wrapper.lib or any CEF runtime files
-        # (bin/release/*, resources/*) here -- nothing in the viewer links
-        # llcefbrowser yet (this package is groundwork for the future
-        # in-viewer CEF producer), and the viewer already installs the
-        # identical CEF distribution's libs/runtime via the "dullahan"
-        # package for the legacy media plugin; packaging the same files
-        # again here just collides with that install (autobuild refuses two
-        # packages writing the same path). A future consumer of this
-        # package should also depend on ll::cef (CEFPlugin.cmake) to get
-        # those shared CEF libraries -- see EmbeddedBrowser.cmake.
+        # llcefbrowser's own library, plus (since 2026-09) libcef.lib/
+        # libcef_dll_wrapper.lib and the full CEF runtime (bin/release/*,
+        # resources/*) -- this package is now self-sufficient and no longer
+        # relies on the viewer separately installing the "dullahan" package
+        # for those shared pieces (the viewer's own EmbeddedBrowser.cmake no
+        # longer depends on it either -- see that file). Safe to package
+        # these paths directly now: nothing else in a normal viewer build
+        # writes to them any more, so there's no autobuild same-path
+        # collision to avoid (the reason this used to be skipped).
         cp "$stage/Release/llcefbrowser.lib" "$stage/lib/release/"
+        cp "$cef_no_wrapper_dir/Release/libcef.lib" "$stage/lib/release/"
+        cp "$cef_no_wrapper_build_dir/libcef_dll_wrapper/Release/libcef_dll_wrapper.lib" "$stage/lib/release/"
+
+        cp "$cef_no_wrapper_dir/Release/"*.dll "$stage/bin/release/"
+        cp "$cef_no_wrapper_dir/Release/v8_context_snapshot.bin" "$stage/bin/release/"
+        cp "$cef_no_wrapper_dir/Release/vk_swiftshader_icd.json" "$stage/bin/release/"
+
+        cp "$cef_no_wrapper_dir/Resources/"*.pak "$stage/resources/"
+        cp "$cef_no_wrapper_dir/Resources/icudtl.dat" "$stage/resources/"
+        cp "$cef_no_wrapper_dir/Resources/locales/"*.pak "$stage/resources/locales/"
 
         # license -- namespaced (not just LICENSES/LICENSE) to avoid
         # colliding with some other already-installed package using that

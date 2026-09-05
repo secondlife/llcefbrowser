@@ -19,18 +19,18 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>1900ee8ae7c67abf1c9ddb9fea7c540b4ac2ff6d</string>
+              <string>c607b6f7f1846f8370bc4a893406e7abda750d7b</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-150.0.11_gb887805_chromium-150.0.7871.115-windows64-261901728.tar.zst</string>
+              <string>https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-151.3.24_g2384915_chromium-151.0.7922.174-windows64-262470121.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
           </map>
         </map>
         <key>version</key>
-        <string>cef_bin-150.0.11_gb887805_chromium-150.0.7871.115</string>
+        <string>cef_bin-151.3.24_g2384915_chromium-151.0.7922.174</string>
       </map>
     </map>
     <key>package_description</key>
@@ -97,6 +97,12 @@
           <key>manifest</key>
           <array>
             <string>lib/release/llcefbrowser.lib</string>
+            <string>lib/release/libcef.lib</string>
+            <string>lib/release/libcef_dll_wrapper.lib</string>
+            <string>bin/release/*</string>
+            <string>resources/*.pak</string>
+            <string>resources/icudtl.dat</string>
+            <string>resources/locales/*.pak</string>
           </array>
           <key>name</key>
           <string>windows64</string>
