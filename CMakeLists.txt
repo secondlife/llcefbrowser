@@ -151,11 +151,34 @@ file(STRINGS ${CEF_ROOT}/include/cef_version.h CHROME_VERSION_BUILD_STR
 file(STRINGS ${CEF_ROOT}/include/cef_version.h CHROME_VERSION_PATCH_STR
      REGEX "\#define CHROME_VERSION_PATCH "
 )
+# Prefer the exact release tag (e.g. "v1.38.0") when HEAD is one -- true for
+# the CI "build" job triggered by a "vX.Y.Z" tag push, which is the only case
+# that actually gets published (see .github/workflows/build.yaml's "release"
+# job, gated on refs/tags/v*). Using the tag's own minor number here keeps
+# LLCEFBROWSER_VERSION_MINOR (and therefore VERSION.txt/the published
+# package's own filename) in lockstep with the git tag that triggered it,
+# instead of an independent, ever-increasing total commit count that could
+# drift ahead of the tag whenever more than one commit landed since the
+# previous release (exactly what happened between v1.37.0 and v1.38.0).
+# Falls back to the raw commit count for any other build (a plain push to
+# main, or a local dev build with no tag checked out) -- neither is ever
+# published as a real release, so an approximate, monotonic-ish number there
+# is fine.
 execute_process(
-  COMMAND git rev-list HEAD --count
-  OUTPUT_VARIABLE GIT_COMMIT_COUNT
+  COMMAND git describe --tags --exact-match
+  OUTPUT_VARIABLE GIT_EXACT_TAG
   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+  RESULT_VARIABLE GIT_EXACT_TAG_RESULT
 )
+if (GIT_EXACT_TAG_RESULT EQUAL 0 AND GIT_EXACT_TAG MATCHES "^v[0-9]+\\.([0-9]+)\\.[0-9]+$")
+  set(GIT_COMMIT_COUNT "${CMAKE_MATCH_1}")
+else ()
+  execute_process(
+    COMMAND git rev-list HEAD --count
+    OUTPUT_VARIABLE GIT_COMMIT_COUNT
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+  )
+endif ()
 execute_process(
   COMMAND git rev-parse --short HEAD
   OUTPUT_VARIABLE GIT_COMMIT_HASH
