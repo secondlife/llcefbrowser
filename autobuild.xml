@@ -19,18 +19,18 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>c607b6f7f1846f8370bc4a893406e7abda750d7b</string>
+              <string>1d4d79713e8056ff9935c8baa72f075113921d4a</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-151.3.24_g2384915_chromium-151.0.7922.174-windows64-262470121.tar.zst</string>
+              <string>https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-152.0.6_g708dc14_chromium-152.0.7977.83-windows64-262510108.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
           </map>
         </map>
         <key>version</key>
-        <string>cef_bin-151.3.24_g2384915_chromium-151.0.7922.174</string>
+        <string>cef_bin-152.0.6_g708dc14_chromium-152.0.7977.83</string>
       </map>
     </map>
     <key>package_description</key>

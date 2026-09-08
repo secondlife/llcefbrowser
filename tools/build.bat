@@ -13,7 +13,7 @@ if exist build rmdir build /s /q
 @rem (https://cef-builds.spotifycdn.com/) works here too if you just need a
 @rem quick local build and don't care about codec support, but then this
 @rem local dev build no longer matches what actually ships.
-set CEF_MINIMAL_URL=https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-151.3.24_g2384915_chromium-151.0.7922.174-windows64-262470121.tar.zst
+set CEF_MINIMAL_URL=https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-152.0.6_g708dc14_chromium-152.0.7977.83-windows64-262510108.tar.zst
 
 cmake -B build -G "Visual Studio 17 2022" -A x64  -DCEF_RUNTIME_LIBRARY_FLAG=/MD -DUSE_SANDBOX=OFF -DCEF_PACKAGE_URL=%CEF_MINIMAL_URL%
 cmake --build build --config Release
