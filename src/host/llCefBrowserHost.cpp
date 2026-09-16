@@ -35,18 +35,28 @@
 // the exact same ExecuteSubProcess() the main executable already calls on
 // every other platform; no app-specific logic belongs here at all.
 //
-// Confirmed empirically (not just assumed): this executable links against
-// llcefbrowser, which itself links directly against the CEF framework (see
-// CMakeLists.txt) -- that gives it a hard, build-time
-// @executable_path/../Frameworks/Chromium Embedded Framework.framework
-// dependency, resolved automatically by dyld before main() ever runs
-// (verified: running this binary before that framework is in place fails at
-// the dyld loader, never reaching main() at all). CefScopedLibraryLoader
-// (CEF's own dlopen-based alternative for a helper that does NOT hard-link
-// the framework) would be redundant here and is deliberately not used.
+// CefScopedLibraryLoader IS still required here, unconditionally, even
+// though this executable also hard-links the framework at build time (see
+// target_link_libraries in CMakeLists.txt) -- an earlier version of this
+// file dropped it on the theory that the hard link made it redundant. That
+// was wrong: per CEF's own cef_library_loader.h, "loading at runtime
+// instead of linking directly is a requirement of the macOS sandbox
+// implementation" -- the hard link only satisfies dyld's own load-time
+// requirement; CefExecuteProcess() itself calls through an internal
+// function-pointer table that only this loader populates, and crashes
+// (SIGSEGV, null function pointer) without it. Confirmed by reproducing
+// the exact same crash in the example apps (see single-browser-example.cpp)
+// and fixing it the same way.
+#include "include/wrapper/cef_library_loader.h"
 #include "llCefBrowserLib.h"
 
 int main(int argc, char* argv[])
 {
+    CefScopedLibraryLoader library_loader;
+    if (! library_loader.LoadInHelper())
+    {
+        return 1;
+    }
+
     return llCefBrowserLib::ExecuteSubProcess(argc, argv);
 }

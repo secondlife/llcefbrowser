@@ -31,17 +31,13 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
 
+// No more platform split here: keyboard forwarding to CEF now goes through
+// GLFW's own cross-platform key/char callbacks (see keyCallback()/
+// charCallback()), not a raw native-window message hook, so this file no
+// longer needs GLFW_EXPOSE_NATIVE_WIN32/glfw3native.h/commctrl.h at all.
 #include <glad/glad.h>
-#if defined(WIN32)
-#undef APIENTRY
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
-#include <commctrl.h>
-#else
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#endif
 
 #include <iostream>
 #include <memory>
@@ -147,6 +143,7 @@ class multipleBrowsers {
         // GLFW callbacks
         void resizeCallback(int width, int height);
         void keyCallback(int key, int scancode, int action, int mods);
+        void charCallback(unsigned int codepoint);
         void mouseButtonCallback(int button, int action, int mods);
         void mouseMoveCallback(double xpos, double ypos);
         void mouseScrollCallback(double xoffset, double yoffset);
@@ -252,6 +249,9 @@ class multipleBrowsers {
         static void keyCallbackStatic(GLFWwindow* window, int key, int scancode, int action, int mods) {
             static_cast<multipleBrowsers*>(glfwGetWindowUserPointer(window))->keyCallback(key, scancode, action, mods);
         }
+        static void charCallbackStatic(GLFWwindow* window, unsigned int codepoint) {
+            static_cast<multipleBrowsers*>(glfwGetWindowUserPointer(window))->charCallback(codepoint);
+        }
         static void mouseButtonCallbackStatic(GLFWwindow* window, int button, int action, int mods) {
             static_cast<multipleBrowsers*>(glfwGetWindowUserPointer(window))->mouseButtonCallback(button, action, mods);
         }
@@ -264,9 +264,4 @@ class multipleBrowsers {
         static void windowFocusCallbackStatic(GLFWwindow* window, int focused) {
             static_cast<multipleBrowsers*>(glfwGetWindowUserPointer(window))->windowFocusCallback(focused);
         }
-
-#if defined(WIN32)
-        // Windows specific handler for keyboard input - CEF needs raw OS keyboard messages
-        static LRESULT CALLBACK keyEventSubClassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
-#endif
 };

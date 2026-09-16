@@ -369,6 +369,23 @@ namespace llCefBrowserLib {
         settings.no_sandbox = options.noSandbox;
         settings.command_line_args_disabled = options.commandLineArgsDisabled;
 
+        if (! options.resourcesDirPath.empty())
+        {
+            CefString(&settings.resources_dir_path).FromString(options.resourcesDirPath);
+        }
+        if (! options.frameworkDirPath.empty())
+        {
+            CefString(&settings.framework_dir_path).FromString(options.frameworkDirPath);
+        }
+        if (! options.mainBundlePath.empty())
+        {
+            CefString(&settings.main_bundle_path).FromString(options.mainBundlePath);
+        }
+        if (! options.browserSubprocessPath.empty())
+        {
+            CefString(&settings.browser_subprocess_path).FromString(options.browserSubprocessPath);
+        }
+
         if (! options.rootCachePath.empty())
         {
             CefString(&settings.root_cache_path).FromString(options.rootCachePath);

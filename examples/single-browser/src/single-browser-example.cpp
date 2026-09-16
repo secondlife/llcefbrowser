@@ -29,12 +29,55 @@
 #include <filesystem>
 #include <vector>
 
+#if defined(_WIN32)
+#include <windows.h> // GetModuleFileNameA
+#elif defined(__APPLE__)
+#include <climits>       // PATH_MAX
+#include <mach-o/dyld.h> // _NSGetExecutablePath
+#include "include/wrapper/cef_library_loader.h"
+#else // Linux
+#include <climits>  // PATH_MAX
+#include <unistd.h> // readlink
+#endif
+
 #include "llCefBrowserManager.h"
 #include "llCefBrowserLib.h"
 #include "llCefBrowserJavaScriptBridge.h"
 #include "llCefBrowserLibDebug.h"
 
 #include "single-browser-example.h"
+
+namespace {
+    // Was "FIXME: windows only - make cross platform" -- same portable
+    // get_exe_path() approach as the Viewer's own llmediaproducer.cpp.
+#if defined(_WIN32)
+    std::filesystem::path get_exe_path()
+    {
+        char buf[MAX_PATH + 1];
+        GetModuleFileNameA(nullptr, buf, MAX_PATH);
+        return std::filesystem::path(buf);
+    }
+#elif defined(__APPLE__)
+    std::filesystem::path get_exe_path()
+    {
+        char buf[PATH_MAX];
+        uint32_t size = sizeof(buf);
+        if (_NSGetExecutablePath(buf, &size) != 0) return {};
+        std::error_code ec;
+        const auto resolved = std::filesystem::canonical(buf, ec);
+        return ec ? std::filesystem::path(buf) : resolved;
+    }
+#else // Linux
+    std::filesystem::path get_exe_path()
+    {
+        char buf[PATH_MAX];
+        const ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (n <= 0) return {};
+        buf[n] = '\0';
+        return std::filesystem::path(buf);
+    }
+#endif
+}
 
 singleBrowser::singleBrowser() :
     mWindow(nullptr),
@@ -53,6 +96,121 @@ static void errorCallback(int error, const char* description)
 {
     LLCB_OUT_APP_INFO(description << " - code: " << error)
 }
+
+namespace {
+
+    // GLFW's own key/mods encoding is already OS-neutral -- this single
+    // translator now covers every platform this example builds on,
+    // replacing the old Windows-only native-window message hook this file
+    // used before llcefbrowser's own SendKeyEvent became platform-neutral
+    // (see its own comment): that hook only ever existed because Dullahan's
+    // old SendKeyEvent needed a raw Win32 message triple straight from a
+    // WndProc, which GLFW's cross-platform callbacks can't supply on their
+    // own. Values checked directly against the vendored glfw3.h, not
+    // assumed.
+    int glfwKeyToWindowsKeyCode(int key)
+    {
+        if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) return key; // matches VK_A..VK_Z
+        if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) return key; // matches VK_0..VK_9
+        switch (key)
+        {
+            case GLFW_KEY_SPACE:         return 0x20; // VK_SPACE
+            case GLFW_KEY_ENTER:
+            case GLFW_KEY_KP_ENTER:      return 0x0D; // VK_RETURN
+            case GLFW_KEY_TAB:           return 0x09; // VK_TAB
+            case GLFW_KEY_BACKSPACE:     return 0x08; // VK_BACK
+            case GLFW_KEY_DELETE:        return 0x2E; // VK_DELETE
+            case GLFW_KEY_ESCAPE:        return 0x1B; // VK_ESCAPE
+            case GLFW_KEY_HOME:          return 0x24; // VK_HOME
+            case GLFW_KEY_END:           return 0x23; // VK_END
+            case GLFW_KEY_PAGE_UP:       return 0x21; // VK_PRIOR
+            case GLFW_KEY_PAGE_DOWN:     return 0x22; // VK_NEXT
+            case GLFW_KEY_LEFT:          return 0x25; // VK_LEFT
+            case GLFW_KEY_UP:            return 0x26; // VK_UP
+            case GLFW_KEY_RIGHT:         return 0x27; // VK_RIGHT
+            case GLFW_KEY_DOWN:          return 0x28; // VK_DOWN
+            case GLFW_KEY_INSERT:        return 0x2D; // VK_INSERT
+            case GLFW_KEY_CAPS_LOCK:     return 0x14; // VK_CAPITAL
+            case GLFW_KEY_LEFT_SHIFT:
+            case GLFW_KEY_RIGHT_SHIFT:   return 0x10; // VK_SHIFT
+            case GLFW_KEY_LEFT_CONTROL:
+            case GLFW_KEY_RIGHT_CONTROL: return 0x11; // VK_CONTROL
+            case GLFW_KEY_LEFT_ALT:
+            case GLFW_KEY_RIGHT_ALT:     return 0x12; // VK_MENU
+            case GLFW_KEY_LEFT_SUPER:    return 0x5B; // VK_LWIN
+            case GLFW_KEY_RIGHT_SUPER:   return 0x5C; // VK_RWIN
+            case GLFW_KEY_F1:  return 0x70;
+            case GLFW_KEY_F2:  return 0x71;
+            case GLFW_KEY_F3:  return 0x72;
+            case GLFW_KEY_F4:  return 0x73;
+            case GLFW_KEY_F5:  return 0x74;
+            case GLFW_KEY_F6:  return 0x75;
+            case GLFW_KEY_F7:  return 0x76;
+            case GLFW_KEY_F8:  return 0x77;
+            case GLFW_KEY_F9:  return 0x78;
+            case GLFW_KEY_F10: return 0x79;
+            case GLFW_KEY_F11: return 0x7A;
+            case GLFW_KEY_F12: return 0x7B;
+            case GLFW_KEY_KP_0: return 0x60;
+            case GLFW_KEY_KP_1: return 0x61;
+            case GLFW_KEY_KP_2: return 0x62;
+            case GLFW_KEY_KP_3: return 0x63;
+            case GLFW_KEY_KP_4: return 0x64;
+            case GLFW_KEY_KP_5: return 0x65;
+            case GLFW_KEY_KP_6: return 0x66;
+            case GLFW_KEY_KP_7: return 0x67;
+            case GLFW_KEY_KP_8: return 0x68;
+            case GLFW_KEY_KP_9: return 0x69;
+            case GLFW_KEY_KP_MULTIPLY: return 0x6A;
+            case GLFW_KEY_KP_ADD:      return 0x6B;
+            case GLFW_KEY_KP_SUBTRACT: return 0x6D;
+            case GLFW_KEY_KP_DECIMAL:  return 0x6E;
+            case GLFW_KEY_KP_DIVIDE:   return 0x6F;
+            case GLFW_KEY_COMMA:         return 0xBC; // VK_OEM_COMMA
+            case GLFW_KEY_PERIOD:        return 0xBE; // VK_OEM_PERIOD
+            case GLFW_KEY_SLASH:         return 0xBF; // VK_OEM_2
+            case GLFW_KEY_SEMICOLON:     return 0xBA; // VK_OEM_1
+            case GLFW_KEY_EQUAL:         return 0xBB; // VK_OEM_PLUS
+            case GLFW_KEY_MINUS:         return 0xBD; // VK_OEM_MINUS
+            case GLFW_KEY_LEFT_BRACKET:  return 0xDB; // VK_OEM_4
+            case GLFW_KEY_RIGHT_BRACKET: return 0xDD; // VK_OEM_6
+            case GLFW_KEY_BACKSLASH:     return 0xDC; // VK_OEM_5
+            case GLFW_KEY_APOSTROPHE:    return 0xDE; // VK_OEM_7
+            case GLFW_KEY_GRAVE_ACCENT:  return 0xC0; // VK_OEM_3
+            default: return 0;
+        }
+    }
+
+    uint32_t glfwModsToCefModifiers(int mods, int key)
+    {
+        uint32_t modifiers = 0;
+        if (mods & GLFW_MOD_SHIFT)     modifiers |= llCefKeyModShift;
+        if (mods & GLFW_MOD_CONTROL)   modifiers |= llCefKeyModControl;
+        if (mods & GLFW_MOD_ALT)       modifiers |= llCefKeyModAlt;
+        if (mods & GLFW_MOD_SUPER)     modifiers |= llCefKeyModCommand;
+        if (mods & GLFW_MOD_CAPS_LOCK) modifiers |= llCefKeyModCapsLock;
+        if (mods & GLFW_MOD_NUM_LOCK)  modifiers |= llCefKeyModNumLock;
+
+        switch (key)
+        {
+            case GLFW_KEY_LEFT_SHIFT: case GLFW_KEY_LEFT_CONTROL:
+            case GLFW_KEY_LEFT_ALT:   case GLFW_KEY_LEFT_SUPER:
+                modifiers |= llCefKeyModIsLeft;
+                break;
+            case GLFW_KEY_RIGHT_SHIFT: case GLFW_KEY_RIGHT_CONTROL:
+            case GLFW_KEY_RIGHT_ALT:   case GLFW_KEY_RIGHT_SUPER:
+                modifiers |= llCefKeyModIsRight;
+                break;
+        }
+        if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_EQUAL)
+        {
+            modifiers |= llCefKeyModIsKeyPad;
+        }
+
+        return modifiers;
+    }
+
+}  // namespace
 
 void singleBrowser::keyCallback(int key, int scancode, int action, int mods)
 {
@@ -74,98 +232,39 @@ void singleBrowser::keyCallback(int key, int scancode, int action, int mods)
     {
         glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
     }
+
+    if (action == GLFW_REPEAT)
+    {
+        // A held key auto-repeating -- still a "key down" from CEF's own
+        // perspective (matching how a real WM_KEYDOWN also just keeps
+        // firing while a key is held on Windows).
+        action = GLFW_PRESS;
+    }
+    if (action != GLFW_PRESS && action != GLFW_RELEASE)
+    {
+        return;
+    }
+
+    const llCefKeyEventType type = (action == GLFW_PRESS) ? llCefKeyEventType::RawKeyDown : llCefKeyEventType::KeyUp;
+    mCefBrowserManager->SendKeyEvent(mCefBrowser, type, glfwModsToCefModifiers(mods, key),
+        glfwKeyToWindowsKeyCode(key), scancode, 0, 0, /*is_system_key=*/false);
 }
 
-#if defined(WIN32)
-namespace {
-
-    bool isKeyDown(WPARAM key)
-    {
-        return (::GetKeyState(static_cast<int>(key)) & 0x8000) != 0;
-    }
-
-    // llCefBrowserManager::SendKeyEvent no longer accepts a raw Win32 message
-    // triple (see its own comment) -- the caller now does this translation.
-    // Same logic every CEF-on-Windows embedder (cefclient, Dullahan, CEF
-    // Python, etc.) uses, since CEF itself never sees the raw Windows message.
-    uint32_t winKeyMessageToCefModifiers(WPARAM wParam, LPARAM lParam)
-    {
-        uint32_t modifiers = 0;
-        if (::GetKeyState(VK_SHIFT) & 0x8000)   modifiers |= llCefKeyModShift;
-        if (::GetKeyState(VK_CONTROL) & 0x8000) modifiers |= llCefKeyModControl;
-        if (::GetKeyState(VK_MENU) & 0x8000)    modifiers |= llCefKeyModAlt;
-        if (::GetKeyState(VK_NUMLOCK) & 1) modifiers |= llCefKeyModNumLock;
-        if (::GetKeyState(VK_CAPITAL) & 1) modifiers |= llCefKeyModCapsLock;
-
-        switch (wParam)
-        {
-            case VK_RETURN:
-                if ((lParam >> 16) & KF_EXTENDED) modifiers |= llCefKeyModIsKeyPad;
-                break;
-            case VK_INSERT: case VK_DELETE: case VK_HOME: case VK_END:
-            case VK_PRIOR: case VK_NEXT: case VK_UP: case VK_DOWN:
-            case VK_LEFT: case VK_RIGHT:
-                if (!((lParam >> 16) & KF_EXTENDED)) modifiers |= llCefKeyModIsKeyPad;
-                break;
-            case VK_NUMLOCK: case VK_NUMPAD0: case VK_NUMPAD1: case VK_NUMPAD2:
-            case VK_NUMPAD3: case VK_NUMPAD4: case VK_NUMPAD5: case VK_NUMPAD6:
-            case VK_NUMPAD7: case VK_NUMPAD8: case VK_NUMPAD9: case VK_DIVIDE:
-            case VK_MULTIPLY: case VK_SUBTRACT: case VK_ADD: case VK_DECIMAL:
-            case VK_CLEAR:
-                modifiers |= llCefKeyModIsKeyPad;
-                break;
-            case VK_SHIFT:
-                if (isKeyDown(VK_LSHIFT))      modifiers |= llCefKeyModIsLeft;
-                else if (isKeyDown(VK_RSHIFT)) modifiers |= llCefKeyModIsRight;
-                break;
-            case VK_CONTROL:
-                if (isKeyDown(VK_LCONTROL))      modifiers |= llCefKeyModIsLeft;
-                else if (isKeyDown(VK_RCONTROL)) modifiers |= llCefKeyModIsRight;
-                break;
-            case VK_MENU:
-                if (isKeyDown(VK_LMENU))      modifiers |= llCefKeyModIsLeft;
-                else if (isKeyDown(VK_RMENU)) modifiers |= llCefKeyModIsRight;
-                break;
-            case VK_LWIN: modifiers |= llCefKeyModIsLeft; break;
-            case VK_RWIN: modifiers |= llCefKeyModIsRight; break;
-        }
-        return modifiers;
-    }
-
-}  // namespace
-
-// Windows subclass procedure for handling keyboard events using native
-// Windows messages and parameters which is what CEF requires.
-LRESULT CALLBACK singleBrowser::keyEventSubClassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+void singleBrowser::charCallback(unsigned int codepoint)
 {
-    if (uMsg == WM_CHAR || uMsg == WM_KEYDOWN || uMsg == WM_KEYUP ||
-            uMsg == WM_SYSCHAR || uMsg == WM_SYSKEYDOWN || uMsg == WM_SYSKEYUP)
+    // Composed/localized text input (shift, caps lock, dead keys, IME, etc.
+    // already resolved) -- GLFW's own equivalent of a Windows WM_CHAR,
+    // fired separately from keyCallback()'s raw key down/up. Same ImGui
+    // focus-stealing guard as keyCallback() -- typing into a UI text field
+    // like the URL bar must not also reach the page.
+    if (ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard)
     {
-        // This hook operates on raw Win32 messages, entirely outside GLFW's
-        // (and therefore ImGui's) callback system, so it has no other way
-        // to know a text field like the URL bar currently wants the
-        // keystroke instead of the browser - without this check, typing
-        // into any ImGui widget also gets sent to the page as a key event.
-        // Guard against a null context too: this can still fire briefly
-        // during reset(), after resetUI() has destroyed ImGui's context but
-        // before RemoveWindowSubclass() has run.
-        const bool imguiWantsKeyboard = ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard;
-        if (! imguiWantsKeyboard)
-        {
-            singleBrowser* parent = (singleBrowser*)dwRefData;
-            const llCefKeyEventType type = (uMsg == WM_KEYDOWN || uMsg == WM_SYSKEYDOWN) ? llCefKeyEventType::RawKeyDown :
-                                            (uMsg == WM_KEYUP || uMsg == WM_SYSKEYUP)     ? llCefKeyEventType::KeyUp :
-                                                                                            llCefKeyEventType::Char;
-            const bool is_system_key = (uMsg == WM_SYSCHAR || uMsg == WM_SYSKEYDOWN || uMsg == WM_SYSKEYUP);
-            parent->mCefBrowserManager->SendKeyEvent(parent->mCefBrowser, type,
-                winKeyMessageToCefModifiers(wParam, lParam), (int)wParam, (int)lParam,
-                (uint32_t)wParam, (uint32_t)wParam, is_system_key);
-        }
+        return;
     }
 
-    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    mCefBrowserManager->SendKeyEvent(mCefBrowser, llCefKeyEventType::Char, 0,
+        (int)codepoint, 0, codepoint, codepoint, /*is_system_key=*/false);
 }
-#endif
 
 void singleBrowser::mouseButtonCallback(int button, int action, int mods)
 {
@@ -263,6 +362,7 @@ void singleBrowser::resizeCallback(int width, int height)
 void singleBrowser::initGLFWCallbacks()
 {
     glfwSetKeyCallback(mWindow, keyCallbackStatic);
+    glfwSetCharCallback(mWindow, charCallbackStatic);
     glfwSetMouseButtonCallback(mWindow, mouseButtonCallbackStatic);
     glfwSetCursorPosCallback(mWindow, mouseMoveCallbackStatic);
     glfwSetScrollCallback(mWindow, mouseScrollCallbackStatic);
@@ -434,10 +534,7 @@ void singleBrowser::initCEFCallbacks()
 
 void singleBrowser::init()
 {
-    char exe_path[MAX_PATH + 1];
-    // FIXME: windows only - make cross platform
-    GetModuleFileNameA(nullptr, exe_path, MAX_PATH);
-    std::filesystem::path exe_dir = std::filesystem::path(exe_path).parent_path();
+    std::filesystem::path exe_dir = get_exe_path().parent_path();
     std::filesystem::path default_root_cache_path(exe_dir / "cef_profile");
     std::filesystem::path default_cache_path(exe_dir / "cef_profile" / "Default");
     std::filesystem::path default_log_file(exe_dir / "cef_log.txt");
@@ -447,6 +544,23 @@ void singleBrowser::init()
     initOptions.rootCachePath = default_root_cache_path.string();
     initOptions.logFile = default_log_file.string();
     initOptions.userAgentProduct = "llCefBrowser: SingleBrowser";
+#if defined(__APPLE__)
+    // Not a real .app bundle -- point CEF straight at the framework it was
+    // built against (see LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR's own
+    // comment in CMakeLists.txt) instead of its bundle-relative default.
+    // resources_dir_path defaults to "<framework>/Resources" when
+    // framework_dir_path is set and resources_dir_path itself is left
+    // empty... but CEF's own docs describe that fallback only for the
+    // bundle case, so set it explicitly rather than rely on it.
+    initOptions.frameworkDirPath = LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR;
+    initOptions.resourcesDirPath = std::string(LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR) + "/Resources";
+    initOptions.mainBundlePath = exe_dir.string();
+    // Empty means "look for a bundled Helper.app" on macOS specifically
+    // (unlike Windows/Linux, where it already means "re-exec myself") --
+    // this isn't bundled, so every CEF sub-process (GPU/renderer/network)
+    // fails to launch at all without this being set explicitly.
+    initOptions.browserSubprocessPath = get_exe_path().string();
+#endif
     if (! llCefBrowserLib::Initialize(initOptions))
     {
         LLCB_OUT_CEF_ERR("LLCefBrowser was unable to initialize");
@@ -492,13 +606,6 @@ void singleBrowser::init()
     glfwSetWindowPos(mWindow, 64, 100);
 
     glfwSetWindowUserPointer(mWindow, this);
-
-    // Create a Windows subclass procedure for handling keyboard events using
-    // native Windows messages and parameters which is what Dullahan requires.
-#if defined(WIN32)
-    HWND hwnd = glfwGetWin32Window(mWindow);
-    SetWindowSubclass(hwnd, keyEventSubClassProc, 0x01, (DWORD_PTR)this);
-#endif
 
     glfwSetErrorCallback(errorCallback);
     glfwMakeContextCurrent(mWindow);
@@ -613,11 +720,6 @@ void singleBrowser::reset()
 
     glDeleteTextures(1, &mTextureId);
     mTextureId = 0;
-
-#if defined(WIN32)
-    HWND hwnd = glfwGetWin32Window(mWindow);
-    RemoveWindowSubclass(hwnd, keyEventSubClassProc, 0x01);
-#endif
 
     glfwDestroyWindow(mWindow);
 
@@ -944,6 +1046,22 @@ void singleBrowser::resetUI()
 
 int main(int argc, char* argv[])
 {
+#if defined(__APPLE__)
+    // Required on macOS, unconditionally, before any other CEF call -- per
+    // CEF's own cef_library_loader.h: "Loading at runtime instead of
+    // linking directly is a requirement of the macOS sandbox
+    // implementation." Confirmed the hard way: omitting this crashes with
+    // SIGSEGV inside CefExecuteProcess (a null internal function-pointer
+    // table CEF only populates via this loader) even though the framework
+    // is *also* linked at build time -- that link only satisfies dyld's
+    // own load-time requirement, it's a separate mechanism from this.
+    CefScopedLibraryLoader library_loader;
+    if (! library_loader.LoadInMain())
+    {
+        return 1;
+    }
+#endif
+
     int exitCode = llCefBrowserLib::ExecuteSubProcess(argc, argv);
     if (exitCode >= 0)
     {

@@ -74,6 +74,16 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 
+# CEF's own cef_variables.cmake sets this to "" ("Prevent Xcode 11 from
+# doing automatic codesigning") -- tolerated as "don't sign" by the Xcode
+# that comment was written against, but a real configure error ("An empty
+# code signing identity is not valid...") on the Xcode version this was
+# actually built and tested against here. Ad-hoc signing satisfies Xcode
+# without requiring a real signing identity on every dev machine/CI runner.
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-")
+endif()
+
 # ==============================================================================
 # llCefBrowser library
 #
@@ -284,16 +294,20 @@ configure_file(
 # from within a parent project's own solution. Mirrors llshmframe's own
 # LLSHMFRAME_BUILD_EXAMPLES option.
 #
-# Defaults OFF on non-Windows: examples/third-party only vendors a Windows
-# GLFW binary (examples/third-party/glfw-3.4.bin.WIN64) -- porting these two
-# demo apps to mac/Linux is separate, lower-priority work from the real
-# product path (llmediaproducer never uses GLFW at all), so this just keeps
-# a non-Windows configure from failing on a missing third-party dependency
-# these two developer-convenience apps don't actually need to unblock.
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" ON)
-else()
+# Defaults OFF on Linux only: examples/third-party has no vendored Linux
+# GLFW binary yet (Windows and, since 2026-09, macOS both do) -- porting
+# these two demo apps to Linux is separate, lower-priority work from the
+# real product path (llmediaproducer never uses GLFW at all), so this just
+# keeps a Linux configure from failing on a missing third-party dependency
+# these two developer-convenience apps don't actually need to unblock. Both
+# built and actually run correctly on macOS (real page loads/navigation
+# confirmed, not just a clean compile) once llCefBrowserLibInitOptions
+# exposed the mac-specific paths CEF needs for a non-bundled executable --
+# see that header's own comment.
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" OFF)
+else()
+  option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" ON)
 endif()
 if(LLCEFBROWSER_BUILD_EXAMPLES)
 
@@ -307,7 +321,22 @@ set(JSON_FOLDER "json-3.12.0")
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   set(GLFW_FOLDER "glfw-3.4.bin.WIN64")
   set(GLFW_LIB_PATH "lib-vc2022/glfw3.lib")
+  set(EXAMPLE_PLATFORM_LIBS opengl32 comctl32)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  # Deliberately a different (newer) GLFW version than windows64's own
+  # vendored copy -- left that one alone rather than bumping it too, since
+  # it's unrelated, currently-working, separate-platform churn.
+  set(GLFW_FOLDER "glfw-3.5.1.bin.MACOS")
+  set(GLFW_LIB_PATH "lib-universal/libglfw3.a")
+  find_library(COCOA_FRAMEWORK Cocoa)
+  find_library(OPENGL_FRAMEWORK OpenGL)
+  find_library(IOKIT_FRAMEWORK IOKit)
+  # GLFW 3.5's Cocoa backend references CAMetalLayer (cocoa_window.m) even
+  # for a plain OpenGL context -- QuartzCore wasn't needed by Dullahan's own
+  # older vendored GLFW; a real link error ("_OBJC_CLASS_$_CAMetalLayer...
+  # symbol(s) not found") without it, not assumed.
+  find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+  set(EXAMPLE_PLATFORM_LIBS ${COCOA_FRAMEWORK} ${OPENGL_FRAMEWORK} ${IOKIT_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 
@@ -337,15 +366,40 @@ target_include_directories(
   ${THIRD-PARTY-PREFIX}/${GLFW_FOLDER}/include
   ${THIRD-PARTY-PREFIX}/${JSON_FOLDER}/include
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}
+  # Only for CefScopedLibraryLoader (include/wrapper/cef_library_loader.h)
+  # on macOS -- llcefbrowser's own CEF include dirs are PRIVATE, not
+  # propagated to this target.
+  "${CEF_ROOT}/include"
+  "${CEF_ROOT}/include/.."
 )
 target_link_libraries(
   single-browser-example
   PRIVATE
   ${THIRD-PARTY-PREFIX}/${GLFW_FOLDER}/${GLFW_LIB_PATH}
-  opengl32
-  comctl32
+  ${EXAMPLE_PLATFORM_LIBS}
   llcefbrowser
 )
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  # This example isn't packaged as a real .app bundle -- point CEF straight
+  # at the same CEF package it was built against (framework_dir_path/
+  # resources_dir_path, see llCefBrowserLibInitOptions's own comment) rather
+  # than relying on its bundle-relative default, which needs a real bundle.
+  target_compile_definitions(single-browser-example PRIVATE
+    LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR="${CEF_ROOT}/Release/Chromium Embedded Framework.framework")
+  # Separately, the executable is also *hard-linked* against the framework
+  # (see CMakeLists.txt's own llcefbrowser target_link_libraries comment) --
+  # that's a real @executable_path/../Frameworks/... dyld load command, a
+  # different mechanism from the compile definition above, and needs the
+  # framework physically present there or the executable won't even start
+  # (confirmed the hard way: "Library not loaded" before main() runs).
+  add_custom_command(TARGET single-browser-example POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:single-browser-example>/../Frameworks"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${CEF_ROOT}/Release/Chromium Embedded Framework.framework"
+      "$<TARGET_FILE_DIR:single-browser-example>/../Frameworks/Chromium Embedded Framework.framework"
+    COMMENT "Copying CEF framework next to single-browser-example for local dev/testing"
+  )
+endif()
 source_group(
   "Third Party Files"
   FILES
@@ -368,15 +422,31 @@ target_include_directories(
   "${THIRD-PARTY-PREFIX}/${GLFW_FOLDER}/include"
   "${THIRD-PARTY-PREFIX}/${JSON_FOLDER}/include"
   ${THIRD-PARTY-PREFIX}/${IMGUI_FOLDER}
+  # Only for CefScopedLibraryLoader (include/wrapper/cef_library_loader.h)
+  # on macOS -- llcefbrowser's own CEF include dirs are PRIVATE, not
+  # propagated to this target.
+  "${CEF_ROOT}/include"
+  "${CEF_ROOT}/include/.."
 )
 target_link_libraries(
   multiple-browsers-example
   PRIVATE
   ${THIRD-PARTY-PREFIX}/${GLFW_FOLDER}/${GLFW_LIB_PATH}
-  opengl32
-  comctl32
+  ${EXAMPLE_PLATFORM_LIBS}
   llcefbrowser
 )
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  # See single-browser-example's own identical comment above.
+  target_compile_definitions(multiple-browsers-example PRIVATE
+    LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR="${CEF_ROOT}/Release/Chromium Embedded Framework.framework")
+  add_custom_command(TARGET multiple-browsers-example POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:multiple-browsers-example>/../Frameworks"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${CEF_ROOT}/Release/Chromium Embedded Framework.framework"
+      "$<TARGET_FILE_DIR:multiple-browsers-example>/../Frameworks/Chromium Embedded Framework.framework"
+    COMMENT "Copying CEF framework next to multiple-browsers-example for local dev/testing"
+  )
+endif()
 set_property(
   DIRECTORY
   PROPERTY

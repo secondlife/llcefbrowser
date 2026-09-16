@@ -39,11 +39,27 @@
 // fixed by this library's own off-screen-rendering, single-threaded
 // pump model; making them configurable would let a caller break
 // invariants the rest of the API assumes.
-// - browser_subprocess_path, framework_dir_path, main_bundle_path are
-// macOS app-bundle paths, not relevant to this build.
 // - chrome_policy_id, chrome_app_icon_id, use_views_default_popup are
 // Chrome-style-window/enterprise-policy specific.
 // - disable_signal_handlers is POSIX-only.
+//
+// resourcesDirPath/frameworkDirPath/mainBundlePath/browserSubprocessPath ARE
+// exposed (unlike the macOS-only fields above) even though CEF's own docs
+// describe them purely in app-bundle terms: left empty, CEF requires
+// *.pak/icudtl.dat to live in the app bundle's own Resources directory and
+// the framework at "Contents/Frameworks/Chromium Embedded Framework.framework"
+// -- neither applies to a consumer that isn't (or doesn't want to be) a real
+// .app bundle, e.g. a plain command-line tool. Empty (the default) keeps
+// CEF's own bundle-relative auto-detection for a caller that IS bundled.
+// browserSubprocessPath specifically: on Windows/Linux, an empty value
+// already means "re-exec this same executable" (the single-executable
+// model llCefBrowserLib::ExecuteSubProcess() itself relies on) -- but on
+// macOS, empty instead means "look for Contents/Frameworks/<app>
+// Helper.app", so a non-bundled mac caller wanting that same single-
+// executable behavior must set this explicitly to its own executable path
+// (confirmed the hard way: every CEF sub-process -- GPU, renderer, network
+// -- fails to launch at all without it, on a binary with no bundled
+// Helper.app).
 enum class llCefLogSeverity
 {
     Default,
@@ -68,6 +84,15 @@ struct llCefBrowserLibInitOptions
 {
     bool noSandbox = true;
     bool commandLineArgsDisabled = false;
+
+    // macOS-relevant paths, all absolute if set, all empty by default (CEF's
+    // own bundle-relative auto-detection) -- see this file's own top comment
+    // for why these are exposed at all. Meaningless/ignored on other
+    // platforms.
+    std::string resourcesDirPath;  // dir containing *.pak files and icudtl.dat
+    std::string frameworkDirPath;  // path to "...Chromium Embedded Framework.framework" itself
+    std::string mainBundlePath;    // defaults to the top-level app bundle if empty
+    std::string browserSubprocessPath;  // see this file's own top comment
 
     // root_cache_path: parent directory for all profile data; empty = CEF's
     // own platform-specific default.
