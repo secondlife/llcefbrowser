@@ -39,6 +39,19 @@ class llCefBrowserJavaScriptBridge;
 
 namespace llCefBrowserLib {
 
+    // Call as the FIRST thing in main() -- before ExecuteSubProcess(), before
+    // anything else in this library. On macOS this dynamically loads the CEF
+    // framework at runtime, which CEF's own docs describe as "a requirement
+    // of the macOS sandbox implementation" -- without it, ExecuteSubProcess()
+    // (and every other CEF entry point) crashes on a null internal
+    // function-pointer table, even though the framework is *also* linked at
+    // build time (that link only satisfies dyld's own load-time requirement,
+    // a separate mechanism from this). A no-op returning true on every other
+    // platform. Keeps consumers from needing to touch CEF's own
+    // cef_library_loader.h/CefScopedLibraryLoader directly, matching this
+    // header's own goal of never exposing raw CEF types.
+    bool LoadLibrary();
+
     // Call as the FIRST thing in main(), before any other CEF or windowing
     // code. Returns >= 0 if this process is a CEF subprocess (renderer/GPU/
     // utility/etc.) - the caller must return that value from main()

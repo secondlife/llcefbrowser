@@ -38,6 +38,8 @@
 
 #if defined(WIN32)
 #include <windows.h>
+#elif defined(__APPLE__)
+#include "include/wrapper/cef_library_loader.h"
 #endif
 
 #include <memory>
@@ -341,6 +343,19 @@ const llCefBrowserLibInitOptions& LLGetInitOptions()
 }
 
 namespace llCefBrowserLib {
+
+    bool LoadLibrary()
+    {
+#if defined(__APPLE__)
+        // Deliberately leaked: must stay loaded for the entire process
+        // lifetime, and this is called once, for good, before anything else
+        // in this library runs.
+        static CefScopedLibraryLoader* loader = new CefScopedLibraryLoader();
+        return loader->LoadInMain();
+#else
+        return true;
+#endif
+    }
 
     int ExecuteSubProcess(int argc, char** argv)
     {
