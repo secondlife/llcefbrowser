@@ -758,11 +758,14 @@ void llCefBrowserManagerImpl::SendMouseWheelEvent(llCefBrowserHandle handle, int
     }
 }
 
-void llCefBrowserManagerImpl::SendKeyEvent(llCefBrowserHandle handle, uint32_t message, uint64_t wParam, int64_t lParam)
+void llCefBrowserManagerImpl::SendKeyEvent(llCefBrowserHandle handle, llCefKeyEventType type, uint32_t modifiers,
+                                            int windows_key_code, int native_key_code, uint32_t character,
+                                            uint32_t unmodified_character, bool is_system_key)
 {
     if (llCefBrowser* b = Get(handle))
     {
-        b->SendKeyEvent(message, wParam, lParam);
+        b->SendKeyEvent(type, modifiers, windows_key_code, native_key_code, character,
+                         unmodified_character, is_system_key);
     }
 }
 

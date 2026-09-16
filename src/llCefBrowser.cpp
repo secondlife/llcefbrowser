@@ -945,157 +945,59 @@ void llCefBrowser::SendMouseWheelEvent(int x, int y, int deltaY)
     mCefBrowser->GetHost()->SendMouseWheelEvent(event, 0, deltaY);
 }
 
-#if defined(WIN32)
 namespace {
 
-    bool IsKeyDown(WPARAM key)
+    // Translates our own CEF-free llCefKeyModifier bitmask into CEF's actual
+    // cef_event_flags_t bitmask -- deliberately not the same bit positions, so a
+    // future CEF version bump can only ever require a change here, never in any
+    // caller (see llCefKeyModifier's own comment in llCefBrowserHandle.h).
+    uint32_t ToCefKeyModifiers(uint32_t modifiers)
     {
-        return (::GetKeyState(static_cast<int>(key)) & 0x8000) != 0;
-    }
-
-    // Standard translation from a Win32 keyboard message's wParam/lParam to a
-    // CEF modifier bitmask - the same logic every CEF-on-Windows embedder
-    // (cefclient, Dullahan, CEF Python, etc.) uses, since CEF itself never sees
-    // the raw Windows message.
-    uint32_t GetCefKeyboardModifiers(WPARAM wParam, LPARAM lParam)
-    {
-        uint32_t modifiers = 0;
-        if (::GetKeyState(VK_SHIFT) & 0x8000)
-        {
-            modifiers |= EVENTFLAG_SHIFT_DOWN;
-        }
-        if (::GetKeyState(VK_CONTROL) & 0x8000)
-        {
-            modifiers |= EVENTFLAG_CONTROL_DOWN;
-        }
-        if (::GetKeyState(VK_MENU) & 0x8000)
-        {
-            modifiers |= EVENTFLAG_ALT_DOWN;
-        }
-        // Low bit of GetKeyState indicates a toggled (not held) state.
-        if (::GetKeyState(VK_NUMLOCK) & 1)
-        {
-            modifiers |= EVENTFLAG_NUM_LOCK_ON;
-        }
-        if (::GetKeyState(VK_CAPITAL) & 1)
-        {
-            modifiers |= EVENTFLAG_CAPS_LOCK_ON;
-        }
-
-        switch (wParam)
-        {
-            case VK_RETURN:
-                if ((lParam >> 16) & KF_EXTENDED)
-                {
-                    modifiers |= EVENTFLAG_IS_KEY_PAD;
-                }
-                break;
-            case VK_INSERT:
-            case VK_DELETE:
-            case VK_HOME:
-            case VK_END:
-            case VK_PRIOR:
-            case VK_NEXT:
-            case VK_UP:
-            case VK_DOWN:
-            case VK_LEFT:
-            case VK_RIGHT:
-                if (!((lParam >> 16) & KF_EXTENDED))
-                {
-                    modifiers |= EVENTFLAG_IS_KEY_PAD;
-                }
-                break;
-            case VK_NUMLOCK:
-            case VK_NUMPAD0:
-            case VK_NUMPAD1:
-            case VK_NUMPAD2:
-            case VK_NUMPAD3:
-            case VK_NUMPAD4:
-            case VK_NUMPAD5:
-            case VK_NUMPAD6:
-            case VK_NUMPAD7:
-            case VK_NUMPAD8:
-            case VK_NUMPAD9:
-            case VK_DIVIDE:
-            case VK_MULTIPLY:
-            case VK_SUBTRACT:
-            case VK_ADD:
-            case VK_DECIMAL:
-            case VK_CLEAR:
-                modifiers |= EVENTFLAG_IS_KEY_PAD;
-                break;
-            case VK_SHIFT:
-                if (IsKeyDown(VK_LSHIFT))
-                {
-                    modifiers |= EVENTFLAG_IS_LEFT;
-                }
-                else if (IsKeyDown(VK_RSHIFT))
-                {
-                    modifiers |= EVENTFLAG_IS_RIGHT;
-                }
-                break;
-            case VK_CONTROL:
-                if (IsKeyDown(VK_LCONTROL))
-                {
-                    modifiers |= EVENTFLAG_IS_LEFT;
-                }
-                else if (IsKeyDown(VK_RCONTROL))
-                {
-                    modifiers |= EVENTFLAG_IS_RIGHT;
-                }
-                break;
-            case VK_MENU:
-                if (IsKeyDown(VK_LMENU))
-                {
-                    modifiers |= EVENTFLAG_IS_LEFT;
-                }
-                else if (IsKeyDown(VK_RMENU))
-                {
-                    modifiers |= EVENTFLAG_IS_RIGHT;
-                }
-                break;
-            case VK_LWIN:
-                modifiers |= EVENTFLAG_IS_LEFT;
-                break;
-            case VK_RWIN:
-                modifiers |= EVENTFLAG_IS_RIGHT;
-                break;
-        }
-        return modifiers;
+        uint32_t cef_modifiers = 0;
+        if (modifiers & llCefKeyModShift)    cef_modifiers |= EVENTFLAG_SHIFT_DOWN;
+        if (modifiers & llCefKeyModControl)  cef_modifiers |= EVENTFLAG_CONTROL_DOWN;
+        if (modifiers & llCefKeyModAlt)      cef_modifiers |= EVENTFLAG_ALT_DOWN;
+        if (modifiers & llCefKeyModCommand)  cef_modifiers |= EVENTFLAG_COMMAND_DOWN;
+        if (modifiers & llCefKeyModCapsLock) cef_modifiers |= EVENTFLAG_CAPS_LOCK_ON;
+        if (modifiers & llCefKeyModNumLock)  cef_modifiers |= EVENTFLAG_NUM_LOCK_ON;
+        if (modifiers & llCefKeyModIsKeyPad) cef_modifiers |= EVENTFLAG_IS_KEY_PAD;
+        if (modifiers & llCefKeyModIsLeft)   cef_modifiers |= EVENTFLAG_IS_LEFT;
+        if (modifiers & llCefKeyModIsRight)  cef_modifiers |= EVENTFLAG_IS_RIGHT;
+        return cef_modifiers;
     }
 
 }  // namespace
-#endif  // defined(WIN32)
 
-void llCefBrowser::SendKeyEvent(uint32_t message, uint64_t wParam, int64_t lParam)
+// Platform-neutral: every field here is already translated by the caller (see
+// llCefBrowserManager::SendKeyEvent's own comment) from whatever native event its
+// platform produced, so building the CefKeyEvent itself needs no #ifdef at all --
+// unlike the Win32-only code this replaced, this function is identical on every
+// platform CEF itself supports.
+void llCefBrowser::SendKeyEvent(llCefKeyEventType type, uint32_t modifiers, int windows_key_code,
+                                int native_key_code, uint32_t character, uint32_t unmodified_character,
+                                bool is_system_key)
 {
     if (! mCefBrowser)
     {
         return;
     }
 
-#if defined(WIN32)
     CefKeyEvent event;
-    event.windows_key_code = static_cast<int>(wParam);
-    event.native_key_code = static_cast<int>(lParam);
-    event.is_system_key = (message == WM_SYSCHAR || message == WM_SYSKEYDOWN || message == WM_SYSKEYUP);
+    event.windows_key_code = windows_key_code;
+    event.native_key_code = native_key_code;
+    event.is_system_key = is_system_key;
+    event.character = static_cast<char16_t>(character);
+    event.unmodified_character = static_cast<char16_t>(unmodified_character);
+    event.modifiers = ToCefKeyModifiers(modifiers);
 
-    if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
+    switch (type)
     {
-        event.type = KEYEVENT_RAWKEYDOWN;
-    }
-    else if (message == WM_KEYUP || message == WM_SYSKEYUP)
-    {
-        event.type = KEYEVENT_KEYUP;
-    }
-    else
-    {
-        event.type = KEYEVENT_CHAR;
+        case llCefKeyEventType::RawKeyDown: event.type = KEYEVENT_RAWKEYDOWN; break;
+        case llCefKeyEventType::KeyUp:      event.type = KEYEVENT_KEYUP;     break;
+        case llCefKeyEventType::Char:       event.type = KEYEVENT_CHAR;      break;
     }
 
-    event.modifiers = GetCefKeyboardModifiers(static_cast<WPARAM>(wParam), static_cast<LPARAM>(lParam));
     mCefBrowser->GetHost()->SendKeyEvent(event);
-#endif  // defined(WIN32)
 }
 
 void llCefBrowser::SetFocus(bool focus)

@@ -63,6 +63,36 @@ enum class llCefMouseButton
     Right
 };
 
+// CEF-free mirror of cef_key_event_type_t, used by
+// llCefBrowserManager::SendKeyEvent. Deliberately our own enum, not CEF's raw
+// values, so callers (and the wire protocol a caller might carry this over,
+// e.g. the Second Life Viewer's SHM producer) aren't coupled to CEF's own
+// numeric values.
+enum class llCefKeyEventType : uint8_t
+{
+    RawKeyDown,
+    KeyUp,
+    Char
+};
+
+// CEF-free mirror of the cef_event_flags_t bits SendKeyEvent actually uses,
+// same rationale as llCefKeyEventType above. A caller populates this from
+// whatever platform-native modifier state it has (see LLWindowWin32/
+// LLWindowMacOSX's own getCefKeyEventData() in the Second Life Viewer for a
+// worked example); SendKeyEvent translates these into CEF's own bitmask.
+enum llCefKeyModifier : uint32_t
+{
+    llCefKeyModShift    = 1u << 0,
+    llCefKeyModControl  = 1u << 1,
+    llCefKeyModAlt      = 1u << 2,
+    llCefKeyModCommand  = 1u << 3, // mac Cmd; reserved for a future "meta" key elsewhere
+    llCefKeyModCapsLock = 1u << 4,
+    llCefKeyModNumLock  = 1u << 5,
+    llCefKeyModIsKeyPad = 1u << 6,
+    llCefKeyModIsLeft   = 1u << 7,
+    llCefKeyModIsRight  = 1u << 8,
+};
+
 // CEF-free mirror of cef_cursor_type_t, used by
 // llCefBrowserManager::SetOnCursorChangedCallback. Covers CEF's stable core
 // cursor set; anything not explicitly listed here (including any custom

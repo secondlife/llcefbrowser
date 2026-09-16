@@ -129,7 +129,9 @@ class llCefBrowserManagerImpl {
         void SendMouseClickEvent(llCefBrowserHandle handle, int x, int y, llCefMouseButton button, bool mouseUp, int clickCount);
         void SendMouseMoveEvent(llCefBrowserHandle handle, int x, int y, bool mouseLeave);
         void SendMouseWheelEvent(llCefBrowserHandle handle, int x, int y, int deltaY);
-        void SendKeyEvent(llCefBrowserHandle handle, uint32_t message, uint64_t wParam, int64_t lParam);
+        void SendKeyEvent(llCefBrowserHandle handle, llCefKeyEventType type, uint32_t modifiers,
+                          int windows_key_code, int native_key_code, uint32_t character,
+                          uint32_t unmodified_character, bool is_system_key);
         void SetFocus(llCefBrowserHandle handle, bool focus);
         void SetAudioMuted(llCefBrowserHandle handle, bool mute);
         void ShowDevTools(llCefBrowserHandle handle);

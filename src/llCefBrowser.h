@@ -485,9 +485,10 @@ class llCefBrowser : public CefClient,
         void SendMouseMoveEvent(int x, int y, bool mouseLeave);
         void SendMouseWheelEvent(int x, int y, int deltaY);
 
-        // See llCefBrowserManager::SendKeyEvent - implemented for Windows only
-        // (WM_KEYDOWN/WM_KEYUP/WM_CHAR + WM_SYS* equivalents); a no-op elsewhere.
-        void SendKeyEvent(uint32_t message, uint64_t wParam, int64_t lParam);
+        // See llCefBrowserManager::SendKeyEvent's own comment for the field meanings.
+        void SendKeyEvent(llCefKeyEventType type, uint32_t modifiers, int windows_key_code,
+                          int native_key_code, uint32_t character, uint32_t unmodified_character,
+                          bool is_system_key);
 
         void SetFocus(bool focus);
 

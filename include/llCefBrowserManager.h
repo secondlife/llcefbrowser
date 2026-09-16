@@ -386,12 +386,18 @@ class llCefBrowserManager {
         // - scale your platform's raw wheel offset up before passing it in.
         void SendMouseWheelEvent(llCefBrowserHandle handle, int x, int y, int deltaY);
 
-        // Windows-only for now (no-op on other platforms): translates a native
-        // Win32 keyboard message into the corresponding CEF key event and
-        // forwards it to the browser. Pass message/wParam/lParam straight from
-        // your WndProc or SetWindowSubclass callback - this covers
-        // WM_KEYDOWN/WM_KEYUP/WM_CHAR and their WM_SYS* equivalents.
-        void SendKeyEvent(llCefBrowserHandle handle, uint32_t message, uint64_t wParam, int64_t lParam);
+        // Builds and forwards a CEF key event from a platform-neutral description of it -
+        // no CEF header, and no platform-specific type, appears in this signature.
+        // windows_key_code carries a Windows-VK-shaped code regardless of caller platform
+        // (CEF's own convention: even a mac/Linux embedder populates this the same way a
+        // Windows one would); native_key_code is that platform's own raw key code, passed
+        // through unmodified; character/unmodified_character are only meaningful when
+        // type == llCefKeyEventType::Char. The caller is responsible for translating its
+        // own native event into these fields (see LLWindowWin32/LLWindowMacOSX's own
+        // getCefKeyEventData() in the Second Life Viewer for a worked example per platform).
+        void SendKeyEvent(llCefBrowserHandle handle, llCefKeyEventType type, uint32_t modifiers,
+                           int windows_key_code, int native_key_code, uint32_t character,
+                           uint32_t unmodified_character, bool is_system_key);
 
         // Tells CEF whether this browser has keyboard focus. Call with true
         // when your window/control gains focus and false when it loses it -

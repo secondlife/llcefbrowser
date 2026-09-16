@@ -77,6 +77,63 @@ void singleBrowser::keyCallback(int key, int scancode, int action, int mods)
 }
 
 #if defined(WIN32)
+namespace {
+
+    bool isKeyDown(WPARAM key)
+    {
+        return (::GetKeyState(static_cast<int>(key)) & 0x8000) != 0;
+    }
+
+    // llCefBrowserManager::SendKeyEvent no longer accepts a raw Win32 message
+    // triple (see its own comment) -- the caller now does this translation.
+    // Same logic every CEF-on-Windows embedder (cefclient, Dullahan, CEF
+    // Python, etc.) uses, since CEF itself never sees the raw Windows message.
+    uint32_t winKeyMessageToCefModifiers(WPARAM wParam, LPARAM lParam)
+    {
+        uint32_t modifiers = 0;
+        if (::GetKeyState(VK_SHIFT) & 0x8000)   modifiers |= llCefKeyModShift;
+        if (::GetKeyState(VK_CONTROL) & 0x8000) modifiers |= llCefKeyModControl;
+        if (::GetKeyState(VK_MENU) & 0x8000)    modifiers |= llCefKeyModAlt;
+        if (::GetKeyState(VK_NUMLOCK) & 1) modifiers |= llCefKeyModNumLock;
+        if (::GetKeyState(VK_CAPITAL) & 1) modifiers |= llCefKeyModCapsLock;
+
+        switch (wParam)
+        {
+            case VK_RETURN:
+                if ((lParam >> 16) & KF_EXTENDED) modifiers |= llCefKeyModIsKeyPad;
+                break;
+            case VK_INSERT: case VK_DELETE: case VK_HOME: case VK_END:
+            case VK_PRIOR: case VK_NEXT: case VK_UP: case VK_DOWN:
+            case VK_LEFT: case VK_RIGHT:
+                if (!((lParam >> 16) & KF_EXTENDED)) modifiers |= llCefKeyModIsKeyPad;
+                break;
+            case VK_NUMLOCK: case VK_NUMPAD0: case VK_NUMPAD1: case VK_NUMPAD2:
+            case VK_NUMPAD3: case VK_NUMPAD4: case VK_NUMPAD5: case VK_NUMPAD6:
+            case VK_NUMPAD7: case VK_NUMPAD8: case VK_NUMPAD9: case VK_DIVIDE:
+            case VK_MULTIPLY: case VK_SUBTRACT: case VK_ADD: case VK_DECIMAL:
+            case VK_CLEAR:
+                modifiers |= llCefKeyModIsKeyPad;
+                break;
+            case VK_SHIFT:
+                if (isKeyDown(VK_LSHIFT))      modifiers |= llCefKeyModIsLeft;
+                else if (isKeyDown(VK_RSHIFT)) modifiers |= llCefKeyModIsRight;
+                break;
+            case VK_CONTROL:
+                if (isKeyDown(VK_LCONTROL))      modifiers |= llCefKeyModIsLeft;
+                else if (isKeyDown(VK_RCONTROL)) modifiers |= llCefKeyModIsRight;
+                break;
+            case VK_MENU:
+                if (isKeyDown(VK_LMENU))      modifiers |= llCefKeyModIsLeft;
+                else if (isKeyDown(VK_RMENU)) modifiers |= llCefKeyModIsRight;
+                break;
+            case VK_LWIN: modifiers |= llCefKeyModIsLeft; break;
+            case VK_RWIN: modifiers |= llCefKeyModIsRight; break;
+        }
+        return modifiers;
+    }
+
+}  // namespace
+
 // Windows subclass procedure for handling keyboard events using native
 // Windows messages and parameters which is what CEF requires.
 LRESULT CALLBACK singleBrowser::keyEventSubClassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
@@ -96,7 +153,13 @@ LRESULT CALLBACK singleBrowser::keyEventSubClassProc(HWND hWnd, UINT uMsg, WPARA
         if (! imguiWantsKeyboard)
         {
             singleBrowser* parent = (singleBrowser*)dwRefData;
-            parent->mCefBrowserManager->SendKeyEvent(parent->mCefBrowser, uMsg, (uint64_t)wParam, (int64_t)lParam);
+            const llCefKeyEventType type = (uMsg == WM_KEYDOWN || uMsg == WM_SYSKEYDOWN) ? llCefKeyEventType::RawKeyDown :
+                                            (uMsg == WM_KEYUP || uMsg == WM_SYSKEYUP)     ? llCefKeyEventType::KeyUp :
+                                                                                            llCefKeyEventType::Char;
+            const bool is_system_key = (uMsg == WM_SYSCHAR || uMsg == WM_SYSKEYDOWN || uMsg == WM_SYSKEYUP);
+            parent->mCefBrowserManager->SendKeyEvent(parent->mCefBrowser, type,
+                winKeyMessageToCefModifiers(wParam, lParam), (int)wParam, (int)lParam,
+                (uint32_t)wParam, (uint32_t)wParam, is_system_key);
         }
     }
 

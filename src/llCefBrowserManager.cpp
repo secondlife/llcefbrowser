@@ -348,9 +348,12 @@ void llCefBrowserManager::SendMouseWheelEvent(llCefBrowserHandle handle, int x, 
     mImpl->SendMouseWheelEvent(handle, x, y, deltaY);
 }
 
-void llCefBrowserManager::SendKeyEvent(llCefBrowserHandle handle, uint32_t message, uint64_t wParam, int64_t lParam)
+void llCefBrowserManager::SendKeyEvent(llCefBrowserHandle handle, llCefKeyEventType type, uint32_t modifiers,
+                                        int windows_key_code, int native_key_code, uint32_t character,
+                                        uint32_t unmodified_character, bool is_system_key)
 {
-    mImpl->SendKeyEvent(handle, message, wParam, lParam);
+    mImpl->SendKeyEvent(handle, type, modifiers, windows_key_code, native_key_code, character,
+                         unmodified_character, is_system_key);
 }
 
 void llCefBrowserManager::SetFocus(llCefBrowserHandle handle, bool focus)
