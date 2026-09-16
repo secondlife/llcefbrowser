@@ -71,6 +71,12 @@ else()
     "${cef_prebuild_SOURCE_DIR} or ${cef_prebuild_SOURCE_DIR}/cef -- "
     "unrecognized CEF package layout")
 endif()
+# Cached (not just a plain set()) so an external project that
+# add_subdirectory()'s this one -- e.g. llcefshm-example -- can read the
+# resolved path too, for its own macOS framework-copy/frameworkDirPath
+# needs, without re-deriving the flat-vs-nested layout detection above
+# itself. A plain set() here would only be visible within this file.
+set(CEF_ROOT "${CEF_ROOT}" CACHE INTERNAL "Resolved CEF distribution root (flat or nested layout)")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 
