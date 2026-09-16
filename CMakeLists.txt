@@ -12,6 +12,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(llcefbrowser)
 
 # ==============================================================================
+# On macOS, CEF's own bundled cmake/cef_variables.cmake reads PROJECT_ARCH (a
+# single arch, not a semicolon list) to set CMAKE_OSX_ARCHITECTURES itself --
+# a universal build isn't supported by CEF's own macros, so (like Dullahan
+# before this library replaced it) this configures single-arch, and
+# build-cmd.sh's own darwin64 branch runs this twice (x86_64, then arm64) and
+# lipos the two results together afterwards.
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND NOT DEFINED PROJECT_ARCH)
+  message(FATAL_ERROR "PROJECT_ARCH (x86_64 or arm64) must be set on macOS -- CEF's own cmake macros need it before find_package(CEF) runs")
+endif()
+
+# ==============================================================================
 # Grab and build CEF DLL Wrapper
 # (Define a CEF package URL or local DIR in the CMake command line)
 #
@@ -105,11 +116,27 @@ target_include_directories(
     "${CEF_ROOT}/include/.."
 )
 
-target_link_libraries(
-  llcefbrowser
-  "${CEF_ROOT}/Release/libcef.lib"
-  "${CEF_WRAPPER_BINARY_DIR}/libcef_dll_wrapper/Release/libcef_dll_wrapper.lib"
-)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  target_link_libraries(
+    llcefbrowser
+    "${CEF_ROOT}/Release/libcef.lib"
+    "${CEF_WRAPPER_BINARY_DIR}/libcef_dll_wrapper/Release/libcef_dll_wrapper.lib"
+  )
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  # libcef_dll_wrapper is a real CMake target here (defined by CEF's own
+  # bundled CMakeLists.txt, added via find_package(CEF)'s add_subdirectory()
+  # above), unlike Windows' hardcoded .lib path -- linking against the
+  # target itself (rather than guessing its output path) also pulls in any
+  # of its own PUBLIC compile requirements automatically. The actual runtime
+  # library on macOS is the framework itself (CEF_LIBTYPE SHARED there, see
+  # cef_variables.cmake), referenced directly by bundle path the same way
+  # Dullahan's own CMakeLists.txt did before this library replaced it.
+  target_link_libraries(
+    llcefbrowser
+    libcef_dll_wrapper
+    "${CEF_ROOT}/Release/Chromium Embedded Framework.framework"
+  )
+endif()
 
 # Required for C++20 compatibility in CEF
 target_compile_definitions(
@@ -121,6 +148,64 @@ target_compile_definitions(
 # Gather source and headers in a convenient layout for Visual Studio
 source_group("include" FILES ${LLCEFBROWSER_PUBLIC_HEADERS})
 source_group("src" FILES ${LLCEFBROWSER_SRCS})
+
+# ==============================================================================
+# macOS helper-process .app bundles (Renderer/GPU/Plugin/Alerts + the plain
+# browser-process variant) -- CEF's multi-process architecture needs each
+# sub-process type to be a real, separately-identifiable .app on macOS
+# (Info.plist/sandbox requirements), unlike Windows/Linux, where
+# llmediaproducer.cpp instead re-execs itself via
+# llCefBrowserLib::ExecuteSubProcess() (see that function's own comment).
+# Every one of these five bundles runs the exact same tiny main() (see
+# src/host/llCefBrowserHost.cpp) -- it just loads the CEF framework (not
+# linked at build time, see CefScopedLibraryLoader) and calls straight into
+# that same ExecuteSubProcess(), same as every other platform. Mirrors
+# Dullahan's own DullahanHelper*.app pattern (CEF_HELPER_APP_SUFFIXES),
+# which this library replaced.
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(LLCEFBROWSER_HELPER_APP_SUFFIXES
+    "::"
+    " (Alerts):_alerts:.alerts"
+    " (GPU):_gpu:.gpu"
+    " (Plugin):_plugin:.plugin"
+    " (Renderer):_renderer:.renderer"
+  )
+
+  foreach(_suffix_list ${LLCEFBROWSER_HELPER_APP_SUFFIXES})
+    string(REPLACE ":" ";" _suffix_list ${_suffix_list})
+    list(GET _suffix_list 0 _name_suffix)
+    list(GET _suffix_list 1 _target_suffix)
+    list(GET _suffix_list 2 _plist_suffix)
+
+    set(_helper_target "llcefbrowser_host${_target_suffix}")
+    set(_helper_output_name "llCefBrowserHost${_name_suffix}")
+
+    # Built manually (not via MACOSX_BUNDLE_INFO_PLIST's own configure_file,
+    # which uses global variables and would give every one of these five
+    # targets the same, wrong, values) -- same approach as Dullahan's own
+    # CMakeLists.txt used for the identical problem.
+    set(_helper_info_plist "${CMAKE_CURRENT_BINARY_DIR}/host-Info${_target_suffix}.plist")
+    file(READ "${PROJECT_SOURCE_DIR}/src/host/Info.plist.in" _plist_contents)
+    string(REPLACE "\${EXECUTABLE_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
+    string(REPLACE "\${PRODUCT_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
+    string(REPLACE "\${BUNDLE_ID_SUFFIX}" "${_plist_suffix}" _plist_contents ${_plist_contents})
+    file(WRITE ${_helper_info_plist} ${_plist_contents})
+
+    add_executable(${_helper_target} MACOSX_BUNDLE src/host/llCefBrowserHost.cpp)
+    target_include_directories(
+      ${_helper_target}
+      PRIVATE
+        "${CEF_ROOT}/include"
+        "${CEF_ROOT}/include/.."
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(${_helper_target} llcefbrowser)
+    set_target_properties(${_helper_target} PROPERTIES
+      MACOSX_BUNDLE_INFO_PLIST ${_helper_info_plist}
+      OUTPUT_NAME ${_helper_output_name}
+    )
+  endforeach()
+endif()
 
 # ==============================================================================
 # Populate the version header file from the template using CEF and Chromium
@@ -198,7 +283,18 @@ configure_file(
 # demos with no shared-memory transport at all, unrelated to and not runnable
 # from within a parent project's own solution. Mirrors llshmframe's own
 # LLSHMFRAME_BUILD_EXAMPLES option.
-option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" ON)
+#
+# Defaults OFF on non-Windows: examples/third-party only vendors a Windows
+# GLFW binary (examples/third-party/glfw-3.4.bin.WIN64) -- porting these two
+# demo apps to mac/Linux is separate, lower-priority work from the real
+# product path (llmediaproducer never uses GLFW at all), so this just keeps
+# a non-Windows configure from failing on a missing third-party dependency
+# these two developer-convenience apps don't actually need to unblock.
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" ON)
+else()
+  option(LLCEFBROWSER_BUILD_EXAMPLES "Build llcefbrowser's own example applications" OFF)
+endif()
 if(LLCEFBROWSER_BUILD_EXAMPLES)
 
 # CMAKE_CURRENT_SOURCE_DIR, not CMAKE_SOURCE_DIR: this must resolve relative
@@ -316,6 +412,16 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     file(COPY "${SOURCE_FILE}" DESTINATION "${DESTINATION_DIR}")
   endforeach()
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  # Deliberately a no-op: CEF has no separate loose-file manifest on macOS
+  # (no CEF_BINARY_FILES/CEF_RESOURCE_FILES in cef_variables.cmake's own
+  # OS_MAC branch) -- "Chromium Embedded Framework.framework" is a single
+  # self-contained bundle, Resources and all. Copying it anywhere is
+  # meaningless at this library's own build time anyway: llcefbrowser is a
+  # static library with no runtime location of its own, and it isn't this
+  # CMakeLists.txt's job to decide where the framework ends up inside
+  # whichever final consuming .app gets built (that's build-cmd.sh's own
+  # packaging step here, and the consumer's own final assembly step, e.g.
+  # SLMediaProducer.app).
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 

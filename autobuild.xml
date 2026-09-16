@@ -135,6 +135,35 @@
           <key>name</key>
           <string>windows64</string>
         </map>
+        <key>darwin64</key>
+        <map>
+          <key>configurations</key>
+          <map>
+            <key>Release</key>
+            <map>
+              <key>build</key>
+              <map>
+              </map>
+              <key>default</key>
+              <boolean>true</boolean>
+              <key>name</key>
+              <string>Release</string>
+            </map>
+          </map>
+          <key>manifest</key>
+          <array>
+            <string>lib/release/libllcefbrowser.a</string>
+            <string>lib/release/libcef_dll_wrapper.a</string>
+            <string>lib/release/Chromium Embedded Framework.framework</string>
+            <string>lib/release/llCefBrowserHost.app</string>
+            <string>lib/release/llCefBrowserHost (Alerts).app</string>
+            <string>lib/release/llCefBrowserHost (GPU).app</string>
+            <string>lib/release/llCefBrowserHost (Plugin).app</string>
+            <string>lib/release/llCefBrowserHost (Renderer).app</string>
+          </array>
+          <key>name</key>
+          <string>darwin64</string>
+        </map>
       </map>
       <key>source_directory</key>
       <string>src</string>

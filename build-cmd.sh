@@ -115,9 +115,132 @@ case "$AUTOBUILD_PLATFORM" in
         ver_minor="$(grep -oE 'LLCEFBROWSER_VERSION_MINOR [0-9]+' "$top/include/llCefBrowserVersion.h" | cut -d' ' -f2)"
         echo "${ver_major}.${ver_minor}.0" > "$stage/VERSION.txt"
     ;;
-    darwin*|linux*)
-        # Not yet built/tested on this platform -- windows64 is the only
-        # platform actually exercised by the embedded-browser project so far.
+    darwin64)
+        export MACOSX_DEPLOYMENT_TARGET="$LL_BUILD_DARWIN_DEPLOY_TARGET"
+
+        # CEF's own bundled cmake macros need a single PROJECT_ARCH, not a
+        # universal build (see CMakeLists.txt's own comment) -- build each
+        # arch separately with its own Xcode-generator configure, same
+        # per-arch-then-lipo pattern Dullahan used for this exact problem
+        # before this library replaced it. Each arch's own installed cef-bin
+        # package lives directly at $cef_no_wrapper_dir/x86_64 or /arm64
+        # (confirmed empirically against a real `autobuild install`, not
+        # assumed from the raw package's own archive layout).
+        for arch in x86_64 arm64; do
+            arch_build_dir="$stage/build_$arch"
+            rm -rf "$arch_build_dir"
+
+            cmake -S "$top" -B "$arch_build_dir" -G Xcode \
+                -DPROJECT_ARCH="$arch" \
+                -DCEF_PACKAGE_DIR="$cef_no_wrapper_dir/$arch" \
+                -DUSE_SANDBOX=Off \
+                -DLLCEFBROWSER_BUILD_EXAMPLES=OFF
+
+            cmake --build "$arch_build_dir" --config Release --target llcefbrowser --parallel $AUTOBUILD_CPU_COUNT
+            for helper_target in llcefbrowser_host llcefbrowser_host_alerts llcefbrowser_host_gpu \
+                                  llcefbrowser_host_plugin llcefbrowser_host_renderer; do
+                cmake --build "$arch_build_dir" --config Release --target "$helper_target" --parallel $AUTOBUILD_CPU_COUNT
+            done
+        done
+
+        # prepare the staging dirs
+        mkdir -p "$stage/include/llcefbrowser"
+        mkdir -p "$stage/lib/release"
+        mkdir -p "$stage/LICENSES"
+
+        # llcefbrowser's own public headers
+        cp "$top/include/"*.h "$stage/include/llcefbrowser/"
+
+        # llcefbrowser's own library + the CEF wrapper, lipo'd into universal
+        # binaries from the two single-arch builds above
+        lipo -create -output "$stage/lib/release/libllcefbrowser.a" \
+            "$stage/build_x86_64/Release/libllcefbrowser.a" \
+            "$stage/build_arm64/Release/libllcefbrowser.a"
+        lipo -create -output "$stage/lib/release/libcef_dll_wrapper.a" \
+            "$stage/build_x86_64/_deps/cef_prebuild-build/libcef_dll_wrapper/Release/libcef_dll_wrapper.a" \
+            "$stage/build_arm64/_deps/cef_prebuild-build/libcef_dll_wrapper/Release/libcef_dll_wrapper.a"
+
+        # the 5 helper .app bundles -- each one's own Info.plist is already
+        # correct from either arch's build (not arch-specific), so copy one
+        # wholesale and then lipo just the inner Mach-O binary
+        for app_name in "llCefBrowserHost" "llCefBrowserHost (Alerts)" "llCefBrowserHost (GPU)" \
+                        "llCefBrowserHost (Plugin)" "llCefBrowserHost (Renderer)"; do
+            cp -R "$stage/build_x86_64/Release/$app_name.app" "$stage/lib/release/"
+            lipo -create \
+                "$stage/build_x86_64/Release/$app_name.app/Contents/MacOS/$app_name" \
+                "$stage/build_arm64/Release/$app_name.app/Contents/MacOS/$app_name" \
+                -output "$stage/lib/release/$app_name.app/Contents/MacOS/$app_name"
+        done
+
+        # the CEF framework itself -- a single self-contained bundle (see
+        # CMakeLists.txt's own comment on why there's no separate binary/
+        # resource file manifest to iterate on macOS), lipo'd the same way
+        # Dullahan did for the same framework. Lives directly under each
+        # arch's own installed cef-bin package (FetchContent's SOURCE_DIR
+        # form uses that directory in place -- no separate "-src" copy of
+        # its own the way a URL-fetched FetchContent dependency would get).
+        cp -R "$cef_no_wrapper_dir/x86_64/Release/Chromium Embedded Framework.framework" \
+            "$stage/lib/release/"
+        lipo -create \
+            "$cef_no_wrapper_dir/x86_64/Release/Chromium Embedded Framework.framework/Chromium Embedded Framework" \
+            "$cef_no_wrapper_dir/arm64/Release/Chromium Embedded Framework.framework/Chromium Embedded Framework" \
+            -output "$stage/lib/release/Chromium Embedded Framework.framework/Chromium Embedded Framework"
+        lipo -create \
+            "$cef_no_wrapper_dir/x86_64/Release/Chromium Embedded Framework.framework/Libraries/libcef_sandbox.dylib" \
+            "$cef_no_wrapper_dir/arm64/Release/Chromium Embedded Framework.framework/Libraries/libcef_sandbox.dylib" \
+            -output "$stage/lib/release/Chromium Embedded Framework.framework/Libraries/libcef_sandbox.dylib"
+        lipo -create \
+            "$cef_no_wrapper_dir/x86_64/Release/Chromium Embedded Framework.framework/Libraries/libvulkan.dylib" \
+            "$cef_no_wrapper_dir/arm64/Release/Chromium Embedded Framework.framework/Libraries/libvulkan.dylib" \
+            -output "$stage/lib/release/Chromium Embedded Framework.framework/Libraries/libvulkan.dylib"
+        lipo -create \
+            "$cef_no_wrapper_dir/x86_64/Release/Chromium Embedded Framework.framework/Libraries/libvk_swiftshader.dylib" \
+            "$cef_no_wrapper_dir/arm64/Release/Chromium Embedded Framework.framework/Libraries/libvk_swiftshader.dylib" \
+            -output "$stage/lib/release/Chromium Embedded Framework.framework/Libraries/libvk_swiftshader.dylib"
+        # arm64's own v8 snapshot blob, needed alongside x86_64's (already
+        # copied wholesale above) for the universal framework to run on
+        # either architecture -- same approach Dullahan used.
+        cp "$cef_no_wrapper_dir/arm64/Release/Chromium Embedded Framework.framework/Resources/v8_context_snapshot.arm64.bin" \
+            "$stage/lib/release/Chromium Embedded Framework.framework/Resources/"
+
+        # license -- namespaced, same convention as the windows64 branch
+        cp "$top/LICENSE" "$stage/LICENSES/llcefbrowser_LICENSE.txt"
+
+        # sign the binaries, same conditional-on-real-secrets pattern
+        # Dullahan's own build-cmd.sh used for this identical problem --
+        # skip gracefully (log only) when run somewhere without them, e.g.
+        # this repo's own CI or a developer's local machine.
+        CONFIG_FILE="${build_secrets_checkout:-<no build_secrets_checkout>}/code-signing-osx/config.sh"
+        if [[ -n "${build_secrets_checkout:-}" && -f "$CONFIG_FILE" ]]; then
+            source "$CONFIG_FILE"
+
+            pushd "$stage/lib/release/Chromium Embedded Framework.framework/Libraries"
+            for dylib in *.dylib; do
+                [ -f "$dylib" ] && codesign --force --timestamp --options runtime --sign "$APPLE_SIGNATURE" "$dylib"
+            done
+            codesign --force --timestamp --options runtime --sign "$APPLE_SIGNATURE" "../Chromium Embedded Framework"
+            popd
+
+            pushd "$stage/lib/release/"
+            for app in *.app; do
+                [ -d "$app" ] && codesign --force --timestamp --options runtime --sign "$APPLE_SIGNATURE" "$app"
+            done
+            popd
+        else
+            echo "No config file $CONFIG_FILE found; skipping codesign."
+        fi
+
+        # populate version_file -- llCefBrowserVersion.h is generated by the
+        # top-level CMake configure step above (either arch works, both
+        # produce the same version numbers), same approach as windows64
+        ver_major="$(grep -oE 'LLCEFBROWSER_VERSION_MAJOR [0-9]+' "$top/include/llCefBrowserVersion.h" | cut -d' ' -f2)"
+        ver_minor="$(grep -oE 'LLCEFBROWSER_VERSION_MINOR [0-9]+' "$top/include/llCefBrowserVersion.h" | cut -d' ' -f2)"
+        echo "${ver_major}.${ver_minor}.0" > "$stage/VERSION.txt"
+    ;;
+    linux*)
+        # Not yet built/tested on this platform -- windows64/darwin64 are the
+        # only platforms actually exercised by the embedded-browser project
+        # so far.
         exit 1
     ;;
 esac
