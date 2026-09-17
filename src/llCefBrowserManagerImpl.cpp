@@ -166,7 +166,11 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     slot.mBrowser = browserClient;
 
     CefWindowInfo windowInfo;
-    windowInfo.SetAsWindowless(nullptr);  // offscreen, no native parent window
+    // 0, not nullptr: CefWindowHandle is a pointer (HWND/NSView*) on Windows/
+    // macOS but a plain integral X11 window ID (cef_window_handle_t, unsigned
+    // long) on Linux -- nullptr doesn't convert to that, 0 is a valid "no
+    // parent" value for both kinds of handle.
+    windowInfo.SetAsWindowless(0);  // offscreen, no native parent window
 
     // Compositing is driven explicitly (llCefBrowser::SendExternalBeginFrame(), called
     // once per producer main-loop tick) rather than CEF's own windowless_frame_rate-
