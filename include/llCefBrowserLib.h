@@ -50,7 +50,7 @@ namespace llCefBrowserLib {
     // platform. Keeps consumers from needing to touch CEF's own
     // cef_library_loader.h/CefScopedLibraryLoader directly, matching this
     // header's own goal of never exposing raw CEF types.
-    bool LoadLibrary();
+    bool LoadCefLibrary();
 
     // Call as the FIRST thing in main(), before any other CEF or windowing
     // code. Returns >= 0 if this process is a CEF subprocess (renderer/GPU/

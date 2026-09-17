@@ -344,7 +344,7 @@ const llCefBrowserLibInitOptions& LLGetInitOptions()
 
 namespace llCefBrowserLib {
 
-    bool LoadLibrary()
+    bool LoadCefLibrary()
     {
 #if defined(__APPLE__)
         // Deliberately leaked: must stay loaded for the entire process
