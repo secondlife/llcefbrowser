@@ -8,9 +8,10 @@ jobs:
   build:
     strategy:
       matrix:
-        # windows-2022 only for now -- build-cmd.sh doesn't yet build darwin/linux,
-        # see its own comment there for why.
-        os: [windows-2022]
+        # macos-latest and ubuntu-latest added 2026-09-17: build-cmd.sh now
+        # builds all three platforms (darwin64 since 2026-09-16, linux64
+        # freshly added and not yet verified anywhere but here).
+        os: [windows-2022, macos-latest, ubuntu-latest]
         addrsize: ["64"]
     continue-on-error: true
     runs-on: ${{ matrix.os }}

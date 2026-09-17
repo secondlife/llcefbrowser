@@ -238,9 +238,76 @@ case "$AUTOBUILD_PLATFORM" in
         echo "${ver_major}.${ver_minor}.0" > "$stage/VERSION.txt"
     ;;
     linux*)
-        # Not yet built/tested on this platform -- windows64/darwin64 are the
-        # only platforms actually exercised by the embedded-browser project
-        # so far.
-        exit 1
+        # Single arch, no lipo needed (unlike darwin64's universal build) --
+        # CEF's own Linux distribution is a flat Release/ + Resources/ dir,
+        # much closer in shape to windows64's than darwin64's framework
+        # bundle. No separate helper-process executables either: like
+        # Windows, Linux re-execs the consuming binary itself for CEF's
+        # sub-processes (see CMakeLists.txt's own ExecuteSubProcess() comment
+        # on the llcefbrowser target) rather than needing real standalone
+        # .app-style helpers the way macOS's sandbox model requires.
+        cd "$stage"
+        cmake "$top" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCEF_PACKAGE_DIR="$cef_no_wrapper_dir" \
+            -DUSE_SANDBOX=Off \
+            -DLLCEFBROWSER_BUILD_EXAMPLES=OFF \
+            -DCMAKE_CXX_FLAGS="$LL_BUILD_RELEASE" \
+            $(cmake_cxx_standard $LL_BUILD_RELEASE)
+        cmake --build . --target llcefbrowser --parallel $AUTOBUILD_CPU_COUNT
+
+        cd "$top"
+        mkdir -p "$stage/include/llcefbrowser"
+        mkdir -p "$stage/lib/release"
+        mkdir -p "$stage/bin/release"
+        mkdir -p "$stage/resources/locales"
+        mkdir -p "$stage/LICENSES"
+
+        # llcefbrowser's own public headers
+        cp "$top/include/"*.h "$stage/include/llcefbrowser/"
+
+        # llcefbrowser's own static library -- lands directly in the (single-
+        # config, Ninja) build dir root, unlike Xcode's per-config
+        # subdirectory on macOS.
+        cp "$stage/libllcefbrowser.a" "$stage/lib/release/"
+
+        # libcef_dll_wrapper is a real CMake target here too (same
+        # find_package(CEF)-provided FetchContent mechanism as macOS, not a
+        # Darwin-specific thing -- see CMakeLists.txt's own comment), and
+        # already built as an llcefbrowser dependency above
+        # (add_dependencies(llcefbrowser libcef_dll_wrapper)). Located via
+        # find rather than a guessed/hardcoded FetchContent subdirectory
+        # path -- there's no Linux machine to verify that path against here,
+        # and a loud failure beats silently copying nothing.
+        wrapper_lib="$(find "$stage" -name 'libcef_dll_wrapper.a' -print -quit)"
+        if [ -z "$wrapper_lib" ]; then
+            echo "libcef_dll_wrapper.a not found under $stage after building llcefbrowser" >&2
+            exit 1
+        fi
+        cp "$wrapper_lib" "$stage/lib/release/"
+
+        # CEF runtime binaries + resources -- same CEF_BINARY_FILES/
+        # CEF_RESOURCE_FILES manifest CMakeLists.txt's own Linux runtime-copy
+        # step uses, copied here too since build-cmd.sh's packaging step
+        # (unlike that CMakeLists.txt step, which only stages next to
+        # whatever gets built in this same tree) is what actually ends up in
+        # the published autobuild package.
+        for f in chrome-sandbox libcef.so libEGL.so libGLESv2.so \
+                 libvk_swiftshader.so libvulkan.so.1 v8_context_snapshot.bin \
+                 vk_swiftshader_icd.json; do
+            cp "$cef_no_wrapper_dir/Release/$f" "$stage/bin/release/"
+        done
+
+        cp "$cef_no_wrapper_dir/Resources/"*.pak "$stage/resources/"
+        cp "$cef_no_wrapper_dir/Resources/icudtl.dat" "$stage/resources/"
+        cp "$cef_no_wrapper_dir/Resources/locales/"*.pak "$stage/resources/locales/"
+
+        # license -- namespaced, same convention as the other two platforms
+        cp "$top/LICENSE" "$stage/LICENSES/llcefbrowser_LICENSE.txt"
+
+        # populate version_file, same approach as windows64/darwin64
+        ver_major="$(grep -oE 'LLCEFBROWSER_VERSION_MAJOR [0-9]+' "$top/include/llCefBrowserVersion.h" | cut -d' ' -f2)"
+        ver_minor="$(grep -oE 'LLCEFBROWSER_VERSION_MINOR [0-9]+' "$top/include/llCefBrowserVersion.h" | cut -d' ' -f2)"
+        echo "${ver_major}.${ver_minor}.0" > "$stage/VERSION.txt"
     ;;
 esac

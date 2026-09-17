@@ -152,6 +152,18 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     libcef_dll_wrapper
     "${CEF_ROOT}/Release/Chromium Embedded Framework.framework"
   )
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  # Same find_package(CEF)-provided libcef_dll_wrapper target as macOS (this
+  # is the non-Windows CEF cmake path in general, not a Darwin-specific
+  # thing) -- the actual runtime library here is a plain shared object
+  # (CEF_LIBTYPE SHARED, see cef_variables.cmake's OS_LINUX branch), unlike
+  # macOS's framework bundle, so it's linked by its CEF_LIB_RELEASE path
+  # instead of a bundle path.
+  target_link_libraries(
+    llcefbrowser
+    libcef_dll_wrapper
+    "${CEF_LIB_RELEASE}"
+  )
 endif()
 
 # Required for C++20 compatibility in CEF
@@ -499,6 +511,22 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   # packaging step here, and the consumer's own final assembly step, e.g.
   # SLMediaProducer.app).
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  # Linux does have a real CEF_BINARY_FILES/CEF_RESOURCE_FILES manifest
+  # (cef_variables.cmake's OS_LINUX branch) -- same flat Release/Resources
+  # shape as Windows, unlike macOS's single framework bundle. Same
+  # unconditional-per-target rationale as the Windows branch above (real
+  # consumers: this repo's own example apps when LLCEFBROWSER_BUILD_EXAMPLES
+  # is ON, llcefshm-example's cefshm_producer, the Viewer's SLMediaProducer).
+  set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
+  file(MAKE_DIRECTORY "${DESTINATION_DIR}")
+  foreach(file_path IN LISTS CEF_BINARY_FILES)
+    set(SOURCE_FILE "${CEF_BINARY_DIR_RELEASE}/${file_path}")
+    file(COPY "${SOURCE_FILE}" DESTINATION "${DESTINATION_DIR}")
+  endforeach()
+  foreach(file_path IN LISTS CEF_RESOURCE_FILES)
+    set(SOURCE_FILE "${CEF_RESOURCE_DIR}/${file_path}")
+    file(COPY "${SOURCE_FILE}" DESTINATION "${DESTINATION_DIR}")
+  endforeach()
 endif()
 
 # ==============================================================================
