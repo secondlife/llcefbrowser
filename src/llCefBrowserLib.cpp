@@ -246,6 +246,16 @@ namespace {
                     // many contexts/profiles exist.
                     commandLine->AppendSwitch("no-startup-window");
 
+                    // On Linux, Chromium can show a modal "Chromium - Additional Terms"
+                    // first-run dialog that blocks all media from playing until dismissed -
+                    // this app creates every browser itself and has no user-facing UI to
+                    // show or dismiss that dialog, so media silently never starts. Per the
+                    // Chromium docs: "If you need to completely suppress promotional,
+                    // first-run, or profile-selection screens inherited from the Chromium
+                    // base, append the following switches." This only seems to surface on
+                    // Linux, but it's harmless to apply on every platform.
+                    commandLine->AppendSwitch("no-first-run");
+
                     // Chrome's own built-in login prompt UI intercepts HTTP auth challenges
                     // before CefRequestHandler::GetAuthCredentials ever gets a chance to
                     // run - a known CEF behavior (see chromiumembedded/cef#3603) that
