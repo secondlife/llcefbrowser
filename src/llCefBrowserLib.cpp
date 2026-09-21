@@ -228,9 +228,20 @@ namespace {
                 // in particular is read by Blink's own scheduler inside the renderer process,
                 // so unlike the browser-process-only switches below, these three must be
                 // applied for every process type, not just processType.empty().
-                commandLine->AppendSwitch("disable-backgrounding-occluded-windows");
-                commandLine->AppendSwitch("disable-renderer-backgrounding");
-                commandLine->AppendSwitch("disable-background-timer-throttling");
+                //
+                // DIAGNOSTIC, temporary: all three disabled here to test whether they're
+                // what's exposing a SIGTRAP/EXC_BREAKPOINT crash in SLMediaProducer that
+                // only reproduces under real-Developer-ID-signed hardened runtime (never
+                // ad-hoc, and not fixed by --jitless, both independently ruled out) - a
+                // legacy Viewer build on the identical CEF version, signed the same way,
+                // shows no such crash, and these anti-throttling switches (which directly
+                // change background thread-pool scheduling) are the most unusual thing
+                // about this CEF init relative to that legacy build's. If disabling them
+                // fixes this, the original scroll-latency throttling problem they solved
+                // will need a different, non-crashing fix.
+                // commandLine->AppendSwitch("disable-backgrounding-occluded-windows");
+                // commandLine->AppendSwitch("disable-renderer-backgrounding");
+                // commandLine->AppendSwitch("disable-background-timer-throttling");
 
                 if (processType.empty())
                 {
@@ -306,19 +317,11 @@ namespace {
                     commandLine->AppendSwitch("safebrowsing-disable-auto-update");
                     commandLine->AppendSwitch("disable-client-side-phishing-detection");
 
-                    // DIAGNOSTIC, temporary: V8 JIT compilation appears to trigger a
-                    // SIGTRAP/EXC_BREAKPOINT crash inside Chromium Embedded Framework's
-                    // own background thread pool, but only when this process is signed
-                    // with a real Developer ID certificate under macOS hardened runtime -
-                    // never with ad-hoc signing, regardless of entitlements, notarization,
-                    // or quarantine status (all independently ruled out). Matches a class
-                    // of currently-unresolved macOS 26 JIT/hardened-runtime issues other
-                    // projects (Electron, Bun/JavaScriptCore) are independently hitting
-                    // right now, though none with an identical trigger condition. This
-                    // disables JIT entirely as a test of whether that's the actual
-                    // mechanism here too - real cost to JS-heavy page performance if kept,
-                    // not intended as a permanent fix.
-                    commandLine->AppendSwitchWithValue("js-flags", "--jitless");
+                    // DIAGNOSTIC result, not kept: --jitless (js-flags=--jitless) was
+                    // tested here and did NOT fix the SIGTRAP/EXC_BREAKPOINT crash below -
+                    // V8 JIT compilation itself isn't the mechanism, ruling that theory
+                    // out. See the anti-throttling switches above, temporarily disabled
+                    // below, for the next hypothesis being tested.
 
                     // Fixed for the process lifetime -- mInitOptions is already
                     // populated here since Initialize() sets it before calling
