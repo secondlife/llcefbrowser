@@ -304,7 +304,29 @@ namespace {
                     // instead of mDNS-obfuscated - an acceptable tradeoff for a windowless
                     // embedded browser with no user-facing privacy UI of its own to explain the
                     // firewall prompt otherwise.
-                    commandLine->AppendSwitchWithValue("disable-features", "WebRtcHideLocalIpsWithMdns");
+                    // MachPortRendezvousValidatePeerRequirements/EnforcePeerRequirements:
+                    // Chromium's base/apple/mach_port_rendezvous_mac.cc validates a
+                    // subprocess's code signature against an expected "process
+                    // requirement" before handing it Mach ports for IPC. Both are
+                    // documented FEATURE_DISABLED_BY_DEFAULT upstream, yet a live
+                    // debugger session caught this exact validation code executing
+                    // (recording Mac.ProcessRequirement.ValidationRequired) and hitting
+                    // a null-check trap (SIGTRAP/EXC_BREAKPOINT) inside
+                    // ProcessIsSignedAndFulfillsRequirement, in the browser process
+                    // itself, ~130ms-6s after launch on a background thread - and only
+                    // when signed with a real Developer ID cert under hardened runtime
+                    // (never ad-hoc, regardless of entitlements/notarization/quarantine,
+                    // all independently ruled out). This app's browser process re-execs
+                    // itself for subprocess roles (no separate per-role Helper.app
+                    // bundles, since CEF's own sandbox is off) - a structure this
+                    // validation code may not expect, which would explain both why it's
+                    // apparently active here despite being off by default, and why the
+                    // requirement it constructs/checks turns out null. Disabling both
+                    // explicitly to test.
+                    commandLine->AppendSwitchWithValue("disable-features",
+                        "WebRtcHideLocalIpsWithMdns,"
+                        "MachPortRendezvousValidatePeerRequirements,"
+                        "MachPortRendezvousEnforcePeerRequirements");
 
                     // Stop background "phone home" network traffic this embedding has no
                     // use for: periodic component-update checks (e.g. Widevine CDM) against
