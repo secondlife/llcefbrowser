@@ -304,29 +304,43 @@ namespace {
                     // instead of mDNS-obfuscated - an acceptable tradeoff for a windowless
                     // embedded browser with no user-facing privacy UI of its own to explain the
                     // firewall prompt otherwise.
-                    // MachPortRendezvousValidatePeerRequirements/EnforcePeerRequirements:
-                    // Chromium's base/apple/mach_port_rendezvous_mac.cc validates a
-                    // subprocess's code signature against an expected "process
-                    // requirement" before handing it Mach ports for IPC. Both are
-                    // documented FEATURE_DISABLED_BY_DEFAULT upstream, yet a live
-                    // debugger session caught this exact validation code executing
-                    // (recording Mac.ProcessRequirement.ValidationRequired) and hitting
-                    // a null-check trap (SIGTRAP/EXC_BREAKPOINT) inside
-                    // ProcessIsSignedAndFulfillsRequirement, in the browser process
-                    // itself, ~130ms-6s after launch on a background thread - and only
-                    // when signed with a real Developer ID cert under hardened runtime
-                    // (never ad-hoc, regardless of entitlements/notarization/quarantine,
-                    // all independently ruled out). This app's browser process re-execs
-                    // itself for subprocess roles (no separate per-role Helper.app
-                    // bundles, since CEF's own sandbox is off) - a structure this
-                    // validation code may not expect, which would explain both why it's
-                    // apparently active here despite being off by default, and why the
-                    // requirement it constructs/checks turns out null. Disabling both
-                    // explicitly to test.
+                    // A live debugger session (real crash, not a guess) caught a
+                    // SIGTRAP/EXC_BREAKPOINT null-check trap inside Chromium's
+                    // base/mac/process_requirement.cc, in the browser process itself
+                    // on a ThreadPoolBackgroundWorker thread, ~130ms-6s after launch -
+                    // and only when signed with a real Developer ID cert under
+                    // hardened runtime (never ad-hoc, regardless of entitlements,
+                    // notarization, or quarantine - all independently ruled out).
+                    // First attempt (v1.46.0) disabled
+                    // MachPortRendezvousValidatePeerRequirements/
+                    // EnforcePeerRequirements on the mistaken assumption both were
+                    // disabled by default upstream - re-verified against real
+                    // Chromium source and confirmed that fix had zero effect (a
+                    // second live debugger session hit the identical crash, same
+                    // offsets, unchanged). ValidatePeerRequirements is actually
+                    // FEATURE_ENABLED_BY_DEFAULT, and more importantly the real
+                    // crash site is ProcessRequirement::MaybeGatherMetrics() - a
+                    // *separate*, also-enabled-by-default feature
+                    // (GatherProcessRequirementMetrics) that unconditionally posts a
+                    // base::ThreadPool background task (matching our crash's thread
+                    // exactly) to gather UMA telemetry about what process-requirement
+                    // validation *would* conclude, regardless of whether validation
+                    // itself is even active. That code path has a known gap: it
+                    // constructs a SecRequirementRef via AsSecRequirement() and uses
+                    // it via .get() without checking for null, even though the
+                    // construction can return null - plausibly for exactly this app's
+                    // structure (a single executable that re-execs itself for
+                    // subprocess roles, rather than separate per-role Helper.app
+                    // bundles, since CEF's own sandbox is off). We have no use for
+                    // this telemetry regardless (see the phone-home switches below),
+                    // so disabling the feature that gathers it sidesteps the buggy
+                    // code path entirely rather than trying to fix Chromium's own
+                    // null-check gap from the outside.
                     commandLine->AppendSwitchWithValue("disable-features",
                         "WebRtcHideLocalIpsWithMdns,"
                         "MachPortRendezvousValidatePeerRequirements,"
-                        "MachPortRendezvousEnforcePeerRequirements");
+                        "MachPortRendezvousEnforcePeerRequirements,"
+                        "GatherProcessRequirementMetrics");
 
                     // Stop background "phone home" network traffic this embedding has no
                     // use for: periodic component-update checks (e.g. Widevine CDM) against
