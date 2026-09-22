@@ -228,20 +228,9 @@ namespace {
                 // in particular is read by Blink's own scheduler inside the renderer process,
                 // so unlike the browser-process-only switches below, these three must be
                 // applied for every process type, not just processType.empty().
-                //
-                // DIAGNOSTIC, temporary: all three disabled here to test whether they're
-                // what's exposing a SIGTRAP/EXC_BREAKPOINT crash in SLMediaProducer that
-                // only reproduces under real-Developer-ID-signed hardened runtime (never
-                // ad-hoc, and not fixed by --jitless, both independently ruled out) - a
-                // legacy Viewer build on the identical CEF version, signed the same way,
-                // shows no such crash, and these anti-throttling switches (which directly
-                // change background thread-pool scheduling) are the most unusual thing
-                // about this CEF init relative to that legacy build's. If disabling them
-                // fixes this, the original scroll-latency throttling problem they solved
-                // will need a different, non-crashing fix.
-                // commandLine->AppendSwitch("disable-backgrounding-occluded-windows");
-                // commandLine->AppendSwitch("disable-renderer-backgrounding");
-                // commandLine->AppendSwitch("disable-background-timer-throttling");
+                commandLine->AppendSwitch("disable-backgrounding-occluded-windows");
+                commandLine->AppendSwitch("disable-renderer-backgrounding");
+                commandLine->AppendSwitch("disable-background-timer-throttling");
 
                 if (processType.empty())
                 {
@@ -304,42 +293,24 @@ namespace {
                     // instead of mDNS-obfuscated - an acceptable tradeoff for a windowless
                     // embedded browser with no user-facing privacy UI of its own to explain the
                     // firewall prompt otherwise.
-                    // A live debugger session (real crash, not a guess) caught a
-                    // SIGTRAP/EXC_BREAKPOINT null-check trap inside Chromium's
-                    // base/mac/process_requirement.cc, in the browser process itself
-                    // on a ThreadPoolBackgroundWorker thread, ~130ms-6s after launch -
-                    // and only when signed with a real Developer ID cert under
-                    // hardened runtime (never ad-hoc, regardless of entitlements,
-                    // notarization, or quarantine - all independently ruled out).
-                    // First attempt (v1.46.0) disabled
-                    // MachPortRendezvousValidatePeerRequirements/
-                    // EnforcePeerRequirements on the mistaken assumption both were
-                    // disabled by default upstream - re-verified against real
-                    // Chromium source and confirmed that fix had zero effect (a
-                    // second live debugger session hit the identical crash, same
-                    // offsets, unchanged). ValidatePeerRequirements is actually
-                    // FEATURE_ENABLED_BY_DEFAULT, and more importantly the real
-                    // crash site is ProcessRequirement::MaybeGatherMetrics() - a
-                    // *separate*, also-enabled-by-default feature
-                    // (GatherProcessRequirementMetrics) that unconditionally posts a
-                    // base::ThreadPool background task (matching our crash's thread
-                    // exactly) to gather UMA telemetry about what process-requirement
-                    // validation *would* conclude, regardless of whether validation
-                    // itself is even active. That code path has a known gap: it
-                    // constructs a SecRequirementRef via AsSecRequirement() and uses
-                    // it via .get() without checking for null, even though the
-                    // construction can return null - plausibly for exactly this app's
-                    // structure (a single executable that re-execs itself for
-                    // subprocess roles, rather than separate per-role Helper.app
-                    // bundles, since CEF's own sandbox is off). We have no use for
-                    // this telemetry regardless (see the phone-home switches below),
-                    // so disabling the feature that gathers it sidesteps the buggy
-                    // code path entirely rather than trying to fix Chromium's own
-                    // null-check gap from the outside.
+
+                    // GatherProcessRequirementMetrics (enabled by default upstream)
+                    // makes ProcessRequirement::MaybeGatherMetrics() post a
+                    // base::ThreadPool background task that constructs a
+                    // SecRequirementRef via AsSecRequirement() and dereferences it via
+                    // .get() with no null check, even though construction can return
+                    // null - a real Chromium bug (base/mac/process_requirement.cc),
+                    // confirmed via a live debugger session against a crash that only
+                    // reproduced under real Developer ID + hardened runtime signing,
+                    // never ad-hoc (this app's single-executable, self-re-exec
+                    // subprocess model - no separate per-role Helper.app bundles,
+                    // since CEF's own sandbox is off - is the likely reason the
+                    // requirement construction fails here specifically). We have no
+                    // use for this telemetry anyway (see the phone-home switches
+                    // below), so disabling the feature that gathers it sidesteps the
+                    // bug entirely.
                     commandLine->AppendSwitchWithValue("disable-features",
                         "WebRtcHideLocalIpsWithMdns,"
-                        "MachPortRendezvousValidatePeerRequirements,"
-                        "MachPortRendezvousEnforcePeerRequirements,"
                         "GatherProcessRequirementMetrics");
 
                     // Stop background "phone home" network traffic this embedding has no
