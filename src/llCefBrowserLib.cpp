@@ -330,6 +330,27 @@ namespace {
                     // out. See the anti-throttling switches above, temporarily disabled
                     // below, for the next hypothesis being tested.
 
+                    if (mInitOptions.noSandbox)
+                    {
+                        // Linux-specific in effect (harmless no-op elsewhere, since Windows/
+                        // macOS Chromium has no zygote concept at all) -- the zygote pre-fork
+                        // mechanism is a distinct concept from sandboxing itself: no_sandbox
+                        // (--no-sandbox) tells spawned processes not to sandbox themselves,
+                        // but doesn't by itself stop the browser process from still trying to
+                        // launch a zygote to pre-fork them from. Confirmed via a real failure
+                        // under WSL2 (2026-09-23): with no_sandbox on but no-zygote unset, the
+                        // GPU process's zygote-forked launch never completed its ping
+                        // handshake ("Did not receive ping from zygote child" in
+                        // zygote_communication_linux.cc), and CEF gave up on GPU entirely
+                        // ("GPU process isn't usable. Goodbye.") after 6 retries -- the whole
+                        // producer then exited, breaking all media for that slot.
+                        // --no-zygote skips the zygote-forking path altogether, launching
+                        // subprocesses via a plain fork/exec instead -- consistent with
+                        // sandboxing already being off, and avoids this zygote-handshake
+                        // failure mode entirely rather than depending on it working.
+                        commandLine->AppendSwitch("no-zygote");
+                    }
+
                     // Fixed for the process lifetime -- mInitOptions is already
                     // populated here since Initialize() sets it before calling
                     // CefInitialize(), which is what triggers this callback.

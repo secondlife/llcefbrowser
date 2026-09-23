@@ -284,7 +284,12 @@ case "$AUTOBUILD_PLATFORM" in
             echo "libcef_dll_wrapper.a not found under $stage after building llcefbrowser" >&2
             exit 1
         fi
-        cp "$wrapper_lib" "$stage/lib/release/"
+        # Confirmed via a real Linux build (2026-09-23, WSL2/Ubuntu-22.04 --
+        # this whole linux64 case was previously untested on real hardware):
+        # Ninja's own build already places libcef_dll_wrapper.a directly at
+        # this exact destination path, so a plain cp here fails with "same
+        # file". Only copy if find actually found it somewhere else.
+        [ "$wrapper_lib" = "$stage/lib/release/libcef_dll_wrapper.a" ] || cp "$wrapper_lib" "$stage/lib/release/"
 
         # CEF runtime binaries + resources -- same CEF_BINARY_FILES/
         # CEF_RESOURCE_FILES manifest CMakeLists.txt's own Linux runtime-copy
