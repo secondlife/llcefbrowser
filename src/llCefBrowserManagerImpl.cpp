@@ -738,6 +738,38 @@ void llCefBrowserManagerImpl::SetOnBeforeUnloadCallback(llCefBrowserHandle handl
     }
 }
 
+void llCefBrowserManagerImpl::SetOnAudioStreamStartedCallback(llCefBrowserHandle handle, std::function<void(int, int, int)> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetOnAudioStreamStartedCallback(std::move(callback));
+    }
+}
+
+void llCefBrowserManagerImpl::SetOnAudioStreamPacketCallback(llCefBrowserHandle handle, std::function<void(const float* const*, int, int64_t, int)> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetOnAudioStreamPacketCallback(std::move(callback));
+    }
+}
+
+void llCefBrowserManagerImpl::SetOnAudioStreamStoppedCallback(llCefBrowserHandle handle, std::function<void()> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetOnAudioStreamStoppedCallback(std::move(callback));
+    }
+}
+
+void llCefBrowserManagerImpl::SetOnAudioStreamErrorCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetOnAudioStreamErrorCallback(std::move(callback));
+    }
+}
+
 void llCefBrowserManagerImpl::SendMouseClickEvent(llCefBrowserHandle handle, int x, int y, llCefMouseButton button, bool mouseUp, int clickCount)
 {
     if (llCefBrowser* b = Get(handle))

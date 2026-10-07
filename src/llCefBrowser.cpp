@@ -795,6 +795,92 @@ void llCefBrowser::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame
     }
 }
 
+bool llCefBrowser::GetAudioParameters(CefRefPtr<CefBrowser> browser, CefAudioParameters& params)
+{
+    CEF_REQUIRE_UI_THREAD();
+
+    // Declines (no capture, no cost) unless an app callback is actually registered --
+    // copy under the lock rather than holding it, same reasoning as GetAuthCredentials.
+    bool capture;
+    {
+        std::lock_guard<std::mutex> lock(mOnAudioMutex);
+        capture = bool(mOnAudioStreamStarted) || bool(mOnAudioStreamPacket) || bool(mOnAudioStreamStopped) ||
+                  bool(mOnAudioStreamError);
+    }
+    if (!capture)
+    {
+        return false;
+    }
+
+    // `params` already carries CEF's own defaults -- left untouched; this app has no
+    // need to override sample rate/channel layout/buffer size for v1.
+    return true;
+}
+
+void llCefBrowser::OnAudioStreamStarted(CefRefPtr<CefBrowser> browser, const CefAudioParameters& params,
+                                         int channels)
+{
+    // Genuinely CEF's own dedicated audio-capture thread, not the UI thread -- no
+    // CEF-provided CEF_REQUIRE_*_THREAD assert macro exists for it (unlike IO/UI/
+    // renderer), so there's nothing to assert here beyond this comment.
+    std::function<void(int, int, int)> onAudioStreamStarted;
+    {
+        std::lock_guard<std::mutex> lock(mOnAudioMutex);
+        mAudioChannels = channels;
+        onAudioStreamStarted = mOnAudioStreamStarted;
+    }
+    if (onAudioStreamStarted)
+    {
+        onAudioStreamStarted(params.sample_rate, params.frames_per_buffer, channels);
+    }
+}
+
+void llCefBrowser::OnAudioStreamPacket(CefRefPtr<CefBrowser> browser, const float** data,
+                                       int frames, int64_t pts)
+{
+    // Same audio-capture thread as OnAudioStreamStarted -- see its own comment.
+    std::function<void(const float* const*, int, int64_t, int)> onAudioStreamPacket;
+    int channels;
+    {
+        std::lock_guard<std::mutex> lock(mOnAudioMutex);
+        onAudioStreamPacket = mOnAudioStreamPacket;
+        channels = mAudioChannels;
+    }
+    if (onAudioStreamPacket)
+    {
+        onAudioStreamPacket(data, frames, pts, channels);
+    }
+}
+
+void llCefBrowser::OnAudioStreamStopped(CefRefPtr<CefBrowser> browser)
+{
+    CEF_REQUIRE_UI_THREAD();
+    std::function<void()> onAudioStreamStopped;
+    {
+        std::lock_guard<std::mutex> lock(mOnAudioMutex);
+        onAudioStreamStopped = mOnAudioStreamStopped;
+    }
+    if (onAudioStreamStopped)
+    {
+        onAudioStreamStopped();
+    }
+}
+
+void llCefBrowser::OnAudioStreamError(CefRefPtr<CefBrowser> browser, const CefString& message)
+{
+    // UI thread during setup, the audio-capture thread during capture -- no
+    // CEF_REQUIRE_*_THREAD assert for the latter case, same as OnAudioStreamStarted/Packet.
+    std::function<void(const std::string&)> onAudioStreamError;
+    {
+        std::lock_guard<std::mutex> lock(mOnAudioMutex);
+        onAudioStreamError = mOnAudioStreamError;
+    }
+    if (onAudioStreamError)
+    {
+        onAudioStreamError(message.ToString());
+    }
+}
+
 bool llCefBrowser::OnBeforeDownload(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDownloadItem> downloadItem,
                                     const CefString& suggestedName,
                                     CefRefPtr<CefBeforeDownloadCallback> callback)

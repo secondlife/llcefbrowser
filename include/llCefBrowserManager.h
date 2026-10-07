@@ -369,6 +369,31 @@ class llCefBrowserManager {
         // display its own default dialog.
         void SetOnBeforeUnloadCallback(llCefBrowserHandle handle, std::function<bool(const std::string& messageText, bool isReload)> callback);
 
+        // Raw PCM audio capture, straight from CEF's own CefAudioHandler -- below the
+        // DOM/JS layer entirely, unlike any other callback in this file. Capture only
+        // actually starts if at least one of these four is registered (see
+        // llCefBrowser::GetAudioParameters) -- registering none of them costs nothing.
+        //
+        // OnAudioStreamStarted: fires once per capture start (sampleRate, framesPerBuffer,
+        // channels) -- may fire more than once per browser's lifetime (e.g. after a
+        // navigation restarts capture); OnAudioStreamStopped always follows.
+        void SetOnAudioStreamStartedCallback(llCefBrowserHandle handle, std::function<void(int sampleRate, int framesPerBuffer, int channels)> callback);
+
+        // OnAudioStreamPacket: fires on CEF's own dedicated audio-capture thread, not the
+        // UI thread like every other callback in this file -- the app callback must be
+        // safe to invoke from there. `data` is planar (one pointer per channel, matching
+        // CEF's own layout with zero repacking); `frames` is the per-channel frame count,
+        // not a total sample count; `channels` is cached from the preceding
+        // OnAudioStreamStarted purely for convenience.
+        void SetOnAudioStreamPacketCallback(llCefBrowserHandle handle, std::function<void(const float* const* data, int frames, int64_t pts, int channels)> callback);
+
+        // OnAudioStreamStopped: UI thread.
+        void SetOnAudioStreamStoppedCallback(llCefBrowserHandle handle, std::function<void()> callback);
+
+        // OnAudioStreamError: UI thread during setup, the audio-capture thread during
+        // capture -- CEF stops the stream immediately after either way. For logging only.
+        void SetOnAudioStreamErrorCallback(llCefBrowserHandle handle, std::function<void(const std::string& message)> callback);
+
         // x/y are in browser view pixels (the same space as width/height passed
         // to CreateBrowser/ResizeBrowser), origin top-left. mouseUp: false for
         // button-down, true for button-up. clickCount lets multi-click (e.g.

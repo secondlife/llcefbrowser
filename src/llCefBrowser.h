@@ -50,7 +50,8 @@ class llCefBrowser : public CefClient,
     public CefLoadHandler,
     public CefDialogHandler,
     public CefJSDialogHandler,
-    public CefDownloadHandler {
+    public CefDownloadHandler,
+    public CefAudioHandler {
     public:
         llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager);
 
@@ -85,6 +86,9 @@ class llCefBrowser : public CefClient,
             return this;
         }
         CefRefPtr<CefDownloadHandler> GetDownloadHandler() override {
+            return this;
+        }
+        CefRefPtr<CefAudioHandler> GetAudioHandler() override {
             return this;
         }
         bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
@@ -151,6 +155,40 @@ class llCefBrowser : public CefClient,
         void OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                          ErrorCode errorCode, const CefString& errorText,
                          const CefString& failedUrl) override;
+
+        // --- CefAudioHandler ---
+        // Raw PCM capture, gated entirely by whether an app callback is actually
+        // registered (see SetOnAudioStreamStartedCallback below) -- CEF always asks via
+        // GetAudioParameters before it ever calls the other three, so declining there is
+        // enough to make the whole feature a true no-op when nothing wants it. Default
+        // CefAudioParameters (left untouched when declining) match whatever CEF's own
+        // audio pipeline would otherwise use.
+        //
+        // UI thread. True to allow capture (and optionally override params), false to
+        // decline -- declines whenever no app callback is registered, so this costs
+        // nothing for any browser that hasn't asked for audio capture.
+        bool GetAudioParameters(CefRefPtr<CefBrowser> browser, CefAudioParameters& params) override;
+
+        // Browser's own dedicated audio-capture thread, NOT the UI thread -- unlike
+        // every handler above. May fire more than once per browser's lifetime (e.g.
+        // after a navigation restarts capture); OnAudioStreamStopped always follows.
+        void OnAudioStreamStarted(CefRefPtr<CefBrowser> browser, const CefAudioParameters& params,
+                                   int channels) override;
+
+        // Same audio-capture thread as OnAudioStreamStarted. `data` is planar (one
+        // pointer per channel); `frames` is the per-channel frame count, not a total
+        // sample count.
+        void OnAudioStreamPacket(CefRefPtr<CefBrowser> browser, const float** data,
+                                  int frames, int64_t pts) override;
+
+        // UI thread.
+        void OnAudioStreamStopped(CefRefPtr<CefBrowser> browser) override;
+
+        // UI thread during setup, the audio-capture thread during capture -- CEF stops
+        // the stream immediately after either way. Forwarded to the app callback for
+        // logging only (see SetOnAudioStreamErrorCallback) -- not forwarded over the
+        // wire protocol itself (see cefshm_protocol.h's own kAudioStreamStopped comment).
+        void OnAudioStreamError(CefRefPtr<CefBrowser> browser, const CefString& message) override;
 
         // --- CefDialogHandler ---
         // See llCefBrowserManager::SetOnFileDialogCallback. Return value: true
@@ -462,6 +500,34 @@ class llCefBrowser : public CefClient,
             mOnOpenPopup = std::move(callback);
         }
 
+        // See llCefBrowserManager::SetOnAudioStreamStartedCallback. Locked, same reason
+        // as SetOnAuthRequestCallback above -- OnAudioStreamStarted/Packet/Error fire on
+        // CEF's own audio-capture thread, not the UI thread this setter (and
+        // GetAudioParameters, which reads whether ANY of these three is set to decide
+        // whether to capture at all) run on.
+        void SetOnAudioStreamStartedCallback(std::function<void(int, int, int)> callback) {
+            std::lock_guard<std::mutex> lock(mOnAudioMutex);
+            mOnAudioStreamStarted = std::move(callback);
+        }
+
+        void SetOnAudioStreamPacketCallback(std::function<void(const float* const*, int, int64_t, int)> callback) {
+            std::lock_guard<std::mutex> lock(mOnAudioMutex);
+            mOnAudioStreamPacket = std::move(callback);
+        }
+
+        void SetOnAudioStreamStoppedCallback(std::function<void()> callback) {
+            std::lock_guard<std::mutex> lock(mOnAudioMutex);
+            mOnAudioStreamStopped = std::move(callback);
+        }
+
+        // Not forwarded over the wire protocol (see cefshm_protocol.h's own comment on
+        // kAudioStreamStopped) -- exists purely so the app can log it, e.g.
+        // llcefproducer.cpp's own log_error().
+        void SetOnAudioStreamErrorCallback(std::function<void(const std::string&)> callback) {
+            std::lock_guard<std::mutex> lock(mOnAudioMutex);
+            mOnAudioStreamError = std::move(callback);
+        }
+
         // See llCefBrowserManager::SetOnPageSourceRetrievedCallback.
         void SetOnPageSourceRetrievedCallback(std::function<void(const std::string&)> callback, size_t maxBytes) {
             mOnPageSourceRetrieved = std::move(callback);
@@ -610,6 +676,20 @@ class llCefBrowser : public CefClient,
 
         std::function<void(const std::string&, bool, bool)> mOnCustomSchemeURL;
         std::function<void(const std::string&, const std::string&)> mOnOpenPopup;
+
+        // See mOnAuthRequestMutex above for why these are locked -- same reasoning,
+        // same cross-thread shape (CEF's own audio-capture thread vs the UI thread).
+        // mAudioChannels is cached from OnAudioStreamStarted purely so
+        // OnAudioStreamPacket can hand it to the app callback without that callback
+        // needing to separately track per-stream state itself -- read/written only
+        // from the audio-capture thread (both calls happen there), so it doesn't need
+        // its own lock.
+        std::mutex mOnAudioMutex;
+        std::function<void(int, int, int)> mOnAudioStreamStarted; // (sampleRate, framesPerBuffer, channels)
+        std::function<void(const float* const*, int, int64_t, int)> mOnAudioStreamPacket; // (data, frames, pts, channels)
+        std::function<void()> mOnAudioStreamStopped;
+        std::function<void(const std::string&)> mOnAudioStreamError;
+        int mAudioChannels = 0;
 
         std::function<void(const std::string&)> mOnPageSourceRetrieved;
         size_t mMaxSourceBytes = 2048;

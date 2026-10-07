@@ -125,6 +125,10 @@ class llCefBrowserManagerImpl {
         void SetOnPageSourceRetrievedCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback, size_t maxBytes);
         void SetOnJSDialogCallback(llCefBrowserHandle handle, std::function<bool(const std::string&, llCefJSDialogType, const std::string&, const std::string&)> callback);
         void SetOnBeforeUnloadCallback(llCefBrowserHandle handle, std::function<bool(const std::string&, bool)> callback);
+        void SetOnAudioStreamStartedCallback(llCefBrowserHandle handle, std::function<void(int, int, int)> callback);
+        void SetOnAudioStreamPacketCallback(llCefBrowserHandle handle, std::function<void(const float* const*, int, int64_t, int)> callback);
+        void SetOnAudioStreamStoppedCallback(llCefBrowserHandle handle, std::function<void()> callback);
+        void SetOnAudioStreamErrorCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback);
 
         void SendMouseClickEvent(llCefBrowserHandle handle, int x, int y, llCefMouseButton button, bool mouseUp, int clickCount);
         void SendMouseMoveEvent(llCefBrowserHandle handle, int x, int y, bool mouseLeave);
