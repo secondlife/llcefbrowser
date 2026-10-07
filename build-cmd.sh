@@ -297,7 +297,15 @@ case "$AUTOBUILD_PLATFORM" in
         # (unlike that CMakeLists.txt step, which only stages next to
         # whatever gets built in this same tree) is what actually ends up in
         # the published autobuild package.
-        for f in chrome-sandbox libcef.so libEGL.so libGLESv2.so \
+        # This list used to include libEGL.so/libGLESv2.so too -- CEF 154 no
+        # longer bundles them for Linux (confirmed against this exact
+        # version's own CEF_BINARY_FILES manifest, which CMakeLists.txt's
+        # Linux runtime-copy step already derives from the real, version-aware
+        # cef_variables.cmake inside the CEF distribution itself -- this list
+        # here is a separate, manually-kept copy of that same manifest for
+        # packaging purposes, so it drifts whenever CEF's own file set
+        # changes and needs updating by hand at each bump).
+        for f in chrome-sandbox libcef.so \
                  libvk_swiftshader.so libvulkan.so.1 v8_context_snapshot.bin \
                  vk_swiftshader_icd.json; do
             cp "$cef_no_wrapper_dir/Release/$f" "$stage/bin/release/"
