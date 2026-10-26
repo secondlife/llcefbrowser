@@ -13,7 +13,7 @@ if exist build rmdir build /s /q
 @rem (https://cef-builds.spotifycdn.com/) works here too if you just need a
 @rem quick local build and don't care about codec support, but then this
 @rem local dev build no longer matches what actually ships.
-set CEF_MINIMAL_URL=https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-154.0.34_g14c5a08_chromium-154.0.8037.98-windows64-262801230.tar.zst
+set CEF_MINIMAL_URL=https://automated-builds-secondlife-com.s3.us-east-1.amazonaws.com/gh/secondlife/cef/cef_bin-156.0.14_g4fa4ab5_chromium-156.0.8078.48-windows64-262971436.tar.zst
 
 @rem Must match the Viewer's own LL_BUILD_RELEASE flags exactly (see that
 @rem repo's build-vc170-64/CMakeCache.txt, LL_BUILD_RELEASE_ENV) -- in
