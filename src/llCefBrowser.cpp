@@ -818,6 +818,26 @@ void llCefBrowser::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> 
     }
 }
 
+void llCefBrowser::OnLoadingStateChange(CefRefPtr<CefBrowser> browser, bool isLoading,
+                                        bool canGoBack, bool canGoForward)
+{
+    CEF_REQUIRE_UI_THREAD();
+    // Per CEF's own doc comment on this method: it fires "before any calls to
+    // OnLoadStart and after all calls to OnLoadError and/or OnLoadEnd" -- i.e.
+    // its canGoBack/canGoForward parameters are the first point at which
+    // Chromium's NavigationController has actually finished updating for this
+    // navigation. Querying CefBrowser::CanGoBack()/CanGoForward() reactively
+    // from inside OnLoadEnd itself (the previous approach here) samples that
+    // state slightly too early, before this callback's own update -- confirmed
+    // the hard way: CanGoBack() read false from OnLoadEnd for a navigation that
+    // should have made it true. Trust these parameters directly instead of
+    // re-querying the browser.
+    if (mOnLoadingStateChange)
+    {
+        mOnLoadingStateChange(isLoading, canGoBack, canGoForward);
+    }
+}
+
 void llCefBrowser::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                ErrorCode errorCode, const CefString& errorText,
                                const CefString& failedUrl)

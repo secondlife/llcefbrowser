@@ -155,6 +155,10 @@ class llCefBrowser : public CefClient,
         void OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                        int httpStatusCode) override;
 
+        // See llCefBrowserManager::SetOnLoadingStateChangeCallback.
+        void OnLoadingStateChange(CefRefPtr<CefBrowser> browser, bool isLoading,
+                                  bool canGoBack, bool canGoForward) override;
+
         // See llCefBrowserManager::SetOnLoadErrorCallback. Main frame only.
         void OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                          ErrorCode errorCode, const CefString& errorText,
@@ -461,6 +465,11 @@ class llCefBrowser : public CefClient,
             mOnLoadEnd = std::move(callback);
         }
 
+        // See llCefBrowserManager::SetOnLoadingStateChangeCallback.
+        void SetOnLoadingStateChangeCallback(std::function<void(bool, bool, bool)> callback) {
+            mOnLoadingStateChange = std::move(callback);
+        }
+
         // See llCefBrowserManager::SetOnLoadErrorCallback.
         void SetOnLoadErrorCallback(std::function<void(int, const std::string&, const std::string&)> callback) {
             mOnLoadError = std::move(callback);
@@ -670,6 +679,8 @@ class llCefBrowser : public CefClient,
         std::function<void(const std::string&)> mOnTooltip;
         std::function<void()> mOnLoadStart;
         std::function<void(int)> mOnLoadEnd;
+        // See SetOnLoadingStateChangeCallback -- (isLoading, canGoBack, canGoForward).
+        std::function<void(bool, bool, bool)> mOnLoadingStateChange;
         std::function<void(int, const std::string&, const std::string&)> mOnLoadError;
         std::function<void(const std::string&)> mOnQuery;
 

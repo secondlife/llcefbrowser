@@ -270,6 +270,18 @@ class llCefBrowserManager {
         // code. Not for sub-frame/iframe loads.
         void SetOnLoadEndCallback(llCefBrowserHandle handle, std::function<void(int httpStatusCode)> callback);
 
+        // Fired whenever the browser's overall loading state changes - once
+        // when a navigation starts, once when it finishes (completion,
+        // cancellation, or failure). isLoading is true for the first of that
+        // pair, false for the second. canGoBack/canGoForward are the
+        // authoritative values at that exact moment - prefer these over a
+        // separate CanGoBack()/CanGoForward() query from inside
+        // SetOnLoadEndCallback: per CEF's own contract this callback always
+        // fires after OnLoadEnd/OnLoadError, so a CanGoBack() queried from
+        // inside OnLoadEnd itself can read the state as it was *before* this
+        // navigation finished updating it.
+        void SetOnLoadingStateChangeCallback(llCefBrowserHandle handle, std::function<void(bool isLoading, bool canGoBack, bool canGoForward)> callback);
+
         // Fired when the main frame's navigation fails or is canceled.
         // errorCode is CEF/Chromium's raw net error code (see
         // net/base/net_error_list.h in Chromium's source for the meaning of

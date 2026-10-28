@@ -660,6 +660,14 @@ void llCefBrowserManagerImpl::SetOnLoadEndCallback(llCefBrowserHandle handle, st
     }
 }
 
+void llCefBrowserManagerImpl::SetOnLoadingStateChangeCallback(llCefBrowserHandle handle, std::function<void(bool, bool, bool)> callback)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetOnLoadingStateChangeCallback(std::move(callback));
+    }
+}
+
 void llCefBrowserManagerImpl::SetOnLoadErrorCallback(llCefBrowserHandle handle, std::function<void(int, const std::string&, const std::string&)> callback)
 {
     if (llCefBrowser* b = Get(handle))

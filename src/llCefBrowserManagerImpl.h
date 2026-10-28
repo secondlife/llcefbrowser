@@ -115,6 +115,7 @@ class llCefBrowserManagerImpl {
         void SetOnTooltipCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback);
         void SetOnLoadStartCallback(llCefBrowserHandle handle, std::function<void()> callback);
         void SetOnLoadEndCallback(llCefBrowserHandle handle, std::function<void(int)> callback);
+        void SetOnLoadingStateChangeCallback(llCefBrowserHandle handle, std::function<void(bool, bool, bool)> callback);
         void SetOnLoadErrorCallback(llCefBrowserHandle handle, std::function<void(int, const std::string&, const std::string&)> callback);
         void SetOnQueryCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback);
         void SetOnFileDialogCallback(llCefBrowserHandle handle, std::function<void(int64_t, llCefFileDialogMode, const std::string&, const std::string&, const std::vector<std::string>&)> callback);
