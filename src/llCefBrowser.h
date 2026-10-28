@@ -53,7 +53,11 @@ class llCefBrowser : public CefClient,
     public CefDownloadHandler,
     public CefAudioHandler {
     public:
-        llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager);
+        // initialUrl is deliberately NOT passed to CefBrowserHost::CreateBrowser()
+        // itself -- see OnAfterCreated()'s own comment for why; loaded as a
+        // follow-up LoadURL() instead, once the real CefBrowser exists.
+        llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager,
+                     std::string initialUrl);
 
         // Opaque per-browser scratch storage for whatever the app wants to find
         // again given just a handle - see llCefBrowserManager::SetUserData.
@@ -261,14 +265,20 @@ class llCefBrowser : public CefClient,
 
         // See llCefBrowserManager::SetOnAuthRequestCallback. Unlike every
         // other override in this class, CEF calls this one on its own IO
-        // thread rather than the UI thread - resolved synchronously, inline,
-        // using only mOnAuthRequest and the callback already in hand, with no
-        // reach-back into llCefBrowserManagerImpl (whose state is only ever
-        // touched from the UI thread).
+        // thread rather than the UI thread. Resolved asynchronously, same
+        // shape as OnFileDialog/mPendingFileDialogs below -- the app needs a
+        // real human to type credentials, which can't happen inline on CEF's
+        // IO thread, so the CefAuthCallback is held in mPendingAuthRequests
+        // until a later RespondToAuthRequest() call (from the app's own
+        // thread) resolves it.
         bool GetAuthCredentials(CefRefPtr<CefBrowser> browser, const CefString& originUrl,
                                 bool isProxy, const CefString& host, int port,
                                 const CefString& realm, const CefString& scheme,
                                 CefRefPtr<CefAuthCallback> callback) override;
+
+        // See llCefBrowserManager::RespondToAuthRequest.
+        void RespondToAuthRequest(int64_t requestId, bool proceed, const std::string& username,
+                                   const std::string& password);
 
         llCefBrowserHandle GetHandle() const {
             return mHandle;
@@ -485,7 +495,10 @@ class llCefBrowser : public CefClient,
         // from CEF's IO thread while this can be called from the UI thread
         // at any time, an unsynchronized std::function read/write race
         // every other callback (UI-thread-only on both ends) doesn't have.
-        void SetOnAuthRequestCallback(std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> callback) {
+        // Notify-only (no out-params, no return value) -- see
+        // GetAuthCredentials' own comment: resolution happens later, via
+        // RespondToAuthRequest, not inline from this call.
+        void SetOnAuthRequestCallback(std::function<void(int64_t, const std::string&, const std::string&, int, const std::string&, const std::string&, bool)> callback) {
             std::lock_guard<std::mutex> lock(mOnAuthRequestMutex);
             mOnAuthRequest = std::move(callback);
         }
@@ -576,6 +589,11 @@ class llCefBrowser : public CefClient,
         int mWidth;
         int mHeight;
         bool mCloseRequested = false;
+
+        // See OnAfterCreated()'s own comment -- loaded there as a follow-up
+        // LoadURL(), then cleared so it's a strictly one-shot initial
+        // navigation.
+        std::string mInitialUrl;
 
         // Tracks a resize we're still waiting to see confirmed by a
         // matching-size OnPaint. mPendingWidth < 0 means nothing pending.
@@ -672,7 +690,18 @@ class llCefBrowser : public CefClient,
         // not (and cannot, without risking deadlock) hold across the actual
         // app callback invocation.
         std::mutex mOnAuthRequestMutex;
-        std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> mOnAuthRequest;
+        std::function<void(int64_t, const std::string&, const std::string&, int, const std::string&, const std::string&, bool)> mOnAuthRequest;
+
+        // Pending auth requests awaiting a RespondToAuthRequest() call, keyed
+        // by an id generated in GetAuthCredentials -- same shape as
+        // mPendingFileDialogs above, but with its own mutex: GetAuthCredentials
+        // writes this map from CEF's IO thread, RespondToAuthRequest reads/
+        // erases it from whatever thread the app calls it on (the UI thread in
+        // every known caller), a genuine cross-thread access mPendingFileDialogs
+        // itself never has (both its ends are UI-thread-only).
+        std::mutex mPendingAuthRequestsMutex;
+        std::unordered_map<int64_t, CefRefPtr<CefAuthCallback>> mPendingAuthRequests;
+        int64_t mNextAuthRequestId = 1;
 
         std::function<void(const std::string&, bool, bool)> mOnCustomSchemeURL;
         std::function<void(const std::string&, const std::string&)> mOnOpenPopup;

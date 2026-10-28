@@ -314,15 +314,23 @@ class llCefBrowserManager {
         // asking for (e.g. scheme "basic", realm "My Realm") - typically
         // shown to the user in a credentials prompt alongside host:port.
         //
-        // Unlike every other callback in this API, CEF invokes this one on
-        // its own IO thread rather than the UI thread - and it must be
-        // answered synchronously, inline, right here: set username/password
-        // and return true to proceed, or return false to cancel. There is no
-        // deferred/respond-later option (unlike SetOnFileDialogCallback),
-        // because resolving this later from the UI thread would mean
-        // reaching back into this browser's state from the IO thread, which
-        // nothing else in this API is built to do safely.
-        void SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<bool(const std::string& originUrl, const std::string& host, int port, const std::string& realm, const std::string& scheme, bool isProxy, std::string& username, std::string& password)> callback);
+        // CEF invokes this one on its own IO thread rather than the UI
+        // thread, unlike every other callback in this API - but this call
+        // itself is notify-only (no out-params, no return value): same
+        // asynchronous shape as SetOnFileDialogCallback, since answering
+        // this usually means a real human typing credentials, which can't
+        // happen inline on CEF's IO thread. Call RespondToAuthRequest with
+        // the same requestId once you have an answer - inline before
+        // returning from this callback if you genuinely can, or later, e.g.
+        // once your own credentials-prompt UI closes.
+        void SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<void(int64_t requestId, const std::string& originUrl, const std::string& host, int port, const std::string& realm, const std::string& scheme, bool isProxy)> callback);
+
+        // Completes a pending auth request from SetOnAuthRequestCallback.
+        // proceed=false (or an unknown/already-answered requestId) cancels
+        // the request, same as returning false used to under the old
+        // synchronous API.
+        void RespondToAuthRequest(llCefBrowserHandle handle, int64_t requestId, bool proceed,
+                                   const std::string& username, const std::string& password);
 
         // Fired when navigation targets a URL whose scheme is one of a
         // small, fixed set this library recognizes as "custom" (e.g.

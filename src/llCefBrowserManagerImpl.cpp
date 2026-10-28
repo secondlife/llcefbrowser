@@ -162,7 +162,7 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
 
     llCefBrowserHandle handle{index, slot.mGeneration};
 
-    CefRefPtr<llCefBrowser> browserClient = new llCefBrowser(handle, width, height, this);
+    CefRefPtr<llCefBrowser> browserClient = new llCefBrowser(handle, width, height, this, url);
     slot.mBrowser = browserClient;
 
     CefWindowInfo windowInfo;
@@ -194,7 +194,9 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     browserSettings.local_storage = LLToCefState(options.localStorage);
     browserSettings.webgl = LLToCefState(options.webgl);
 
-    if (! CefBrowserHost::CreateBrowser(windowInfo, browserClient, url,
+    // Empty, not url -- see llCefBrowser::OnAfterCreated()'s own comment on why
+    // the real navigation happens there instead, as a follow-up LoadURL().
+    if (! CefBrowserHost::CreateBrowser(windowInfo, browserClient, std::string(),
                                         browserSettings, nullptr, isUI ? mUIContext : mPrimContext))
     {
         // Failed synchronously -- OnAfterCreated will never fire for this
@@ -690,11 +692,20 @@ void llCefBrowserManagerImpl::RespondToFileDialog(llCefBrowserHandle handle, int
     }
 }
 
-void llCefBrowserManagerImpl::SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> callback)
+void llCefBrowserManagerImpl::SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<void(int64_t, const std::string&, const std::string&, int, const std::string&, const std::string&, bool)> callback)
 {
     if (llCefBrowser* b = Get(handle))
     {
         b->SetOnAuthRequestCallback(std::move(callback));
+    }
+}
+
+void llCefBrowserManagerImpl::RespondToAuthRequest(llCefBrowserHandle handle, int64_t requestId, bool proceed,
+                                                    const std::string& username, const std::string& password)
+{
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->RespondToAuthRequest(requestId, proceed, username, password);
     }
 }
 

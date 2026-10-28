@@ -63,11 +63,13 @@ namespace {
 
 }  // namespace
 
-llCefBrowser::llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager)
+llCefBrowser::llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager,
+                           std::string initialUrl)
     // Clamped to a minimum of 1: a 0/negative size here would flow straight
     // into mPixels' w*h*4 byte-count calculation and underflow to a huge
     // allocation.
-    : mHandle(handle), mManager(manager), mWidth(std::max(width, 1)), mHeight(std::max(height, 1))
+    : mHandle(handle), mManager(manager), mWidth(std::max(width, 1)), mHeight(std::max(height, 1)),
+      mInitialUrl(std::move(initialUrl))
 {
     mPixels.Resize(mWidth, mHeight);
 }
@@ -337,7 +339,7 @@ bool llCefBrowser::GetAuthCredentials(CefRefPtr<CefBrowser> browser, const CefSt
     // mOnAuthRequest can be reassigned from the UI thread at any time (see
     // SetOnAuthRequestCallback), and the app's own callback body is
     // arbitrary code that shouldn't run while this lock is held.
-    std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> onAuthRequest;
+    std::function<void(int64_t, const std::string&, const std::string&, int, const std::string&, const std::string&, bool)> onAuthRequest;
     {
         std::lock_guard<std::mutex> lock(mOnAuthRequestMutex);
         onAuthRequest = mOnAuthRequest;
@@ -349,19 +351,48 @@ bool llCefBrowser::GetAuthCredentials(CefRefPtr<CefBrowser> browser, const CefSt
         return false;  // no app handler registered - let CEF show its own dialog
     }
 
-    std::string username;
-    std::string password;
-    const bool proceed = onAuthRequest(originUrl.ToString(), host.ToString(), port,
-                                       realm.ToString(), scheme.ToString(), isProxy,
-                                       username, password);
+    int64_t requestId;
+    {
+        // Registered before invoking the app's callback, same reasoning as
+        // OnFileDialog's mPendingFileDialogs -- an app that responds inline
+        // (calls RespondToAuthRequest before onAuthRequest() returns) needs
+        // this entry to already exist to find anything. In practice the app
+        // needs a real human to type credentials, so this will virtually
+        // always resolve later rather than inline, but the ordering is kept
+        // correct for that case regardless.
+        std::lock_guard<std::mutex> lock(mPendingAuthRequestsMutex);
+        requestId = mNextAuthRequestId++;
+        mPendingAuthRequests[requestId] = callback;
+    }
+
+    onAuthRequest(requestId, originUrl.ToString(), host.ToString(), port,
+                  realm.ToString(), scheme.ToString(), isProxy);
+    return true;  // we're handling this ourselves, resolved later via RespondToAuthRequest
+}
+
+void llCefBrowser::RespondToAuthRequest(int64_t requestId, bool proceed, const std::string& username,
+                                        const std::string& password)
+{
+    CefRefPtr<CefAuthCallback> callback;
+    {
+        std::lock_guard<std::mutex> lock(mPendingAuthRequestsMutex);
+        auto it = mPendingAuthRequests.find(requestId);
+        if (it == mPendingAuthRequests.end())
+        {
+            return;  // unknown, or already responded to
+        }
+        callback = it->second;
+        mPendingAuthRequests.erase(it);
+    }
+
     if (proceed)
     {
         callback->Continue(username, password);
-        return true;
     }
-
-    callback->Cancel();
-    return false;
+    else
+    {
+        callback->Cancel();
+    }
 }
 
 void llCefBrowser::OnAfterCreated(CefRefPtr<CefBrowser> browser)
@@ -395,6 +426,26 @@ void llCefBrowser::OnAfterCreated(CefRefPtr<CefBrowser> browser)
         // A destroy request arrived while creation was still in flight;
         // honor it now instead of leaving this browser running forever.
         mCefBrowser->GetHost()->CloseBrowser(true);
+        return;
+    }
+
+    if (! mInitialUrl.empty())
+    {
+        // CreateBrowser() is deliberately called with an empty url (see
+        // llCefBrowserManagerImpl::CreateBrowser()) rather than this one --
+        // Chromium's NavigationController flags the very first navigation
+        // entry a freshly created WebContents gets as an "initial entry"
+        // (so a user can't navigate "back" into a pre-content/about:blank
+        // state), and that flag isn't cleared by the next real navigation:
+        // it REPLACES the still-initial entry instead of appending after
+        // it, so CanGoBack() stays false until a second subsequent
+        // navigation. Loading the real URL here, as the first navigation
+        // against an already-created (and therefore already-"initial"-
+        // entried) browser, makes it the first REAL entry instead, so
+        // CanGoBack() goes true after just one subsequent navigation, as
+        // expected.
+        mCefBrowser->GetMainFrame()->LoadURL(mInitialUrl);
+        mInitialUrl.clear();
     }
 }
 

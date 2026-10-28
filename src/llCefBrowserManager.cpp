@@ -303,9 +303,15 @@ void llCefBrowserManager::RespondToFileDialog(llCefBrowserHandle handle, int64_t
     mImpl->RespondToFileDialog(handle, dialogId, filePaths);
 }
 
-void llCefBrowserManager::SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> callback)
+void llCefBrowserManager::SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<void(int64_t, const std::string&, const std::string&, int, const std::string&, const std::string&, bool)> callback)
 {
     mImpl->SetOnAuthRequestCallback(handle, std::move(callback));
+}
+
+void llCefBrowserManager::RespondToAuthRequest(llCefBrowserHandle handle, int64_t requestId, bool proceed,
+                                                const std::string& username, const std::string& password)
+{
+    mImpl->RespondToAuthRequest(handle, requestId, proceed, username, password);
 }
 
 void llCefBrowserManager::SetOnCustomSchemeURLCallback(llCefBrowserHandle handle, std::function<void(const std::string&, bool, bool)> callback)

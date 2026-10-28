@@ -119,7 +119,9 @@ class llCefBrowserManagerImpl {
         void SetOnQueryCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback);
         void SetOnFileDialogCallback(llCefBrowserHandle handle, std::function<void(int64_t, llCefFileDialogMode, const std::string&, const std::string&, const std::vector<std::string>&)> callback);
         void RespondToFileDialog(llCefBrowserHandle handle, int64_t dialogId, const std::vector<std::string>& filePaths);
-        void SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<bool(const std::string&, const std::string&, int, const std::string&, const std::string&, bool, std::string&, std::string&)> callback);
+        void SetOnAuthRequestCallback(llCefBrowserHandle handle, std::function<void(int64_t, const std::string&, const std::string&, int, const std::string&, const std::string&, bool)> callback);
+        void RespondToAuthRequest(llCefBrowserHandle handle, int64_t requestId, bool proceed,
+                                   const std::string& username, const std::string& password);
         void SetOnCustomSchemeURLCallback(llCefBrowserHandle handle, std::function<void(const std::string&, bool, bool)> callback);
         void SetOnOpenPopupCallback(llCefBrowserHandle handle, std::function<void(const std::string&, const std::string&)> callback);
         void SetOnPageSourceRetrievedCallback(llCefBrowserHandle handle, std::function<void(const std::string&)> callback, size_t maxBytes);

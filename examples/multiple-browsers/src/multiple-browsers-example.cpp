@@ -731,11 +731,13 @@ void multipleBrowsers::initCEFCallbacks(llCefBrowserHandle handle)
         mCefBrowserManager->RespondToFileDialog(handle, dialogId, { "C:\\foo\\bar\\flasm.txt" });
     });
 
-    mCefBrowserManager->SetOnAuthRequestCallback(handle, [handle](const std::string & originUrl, const std::string & host, int port, const std::string & realm, const std::string & scheme, bool isProxy, std::string & username, std::string & password) -> bool
+    mCefBrowserManager->SetOnAuthRequestCallback(handle, [this, handle](std::int64_t requestId, const std::string & originUrl, const std::string & host, int port, const std::string & realm, const std::string & scheme, bool isProxy)
     {
         // Do not ask CEF to display a credentials dialog - instead, we
-        // would show our own and answer with what the user entered. Called
-        // on CEF's IO thread, so must answer synchronously, right here.
+        // would show our own and answer with what the user entered.
+        // Resolved asynchronously (see SetOnAuthRequestCallback's own
+        // comment) -- answering inline here, with fake credentials, same
+        // as RespondToFileDialog just above.
         LLCB_OUT_APP_INFO("browser " << handle.index << " onAuthRequestCallback: " <<
                           "origin_url: " << originUrl << " " <<
                           "host: " << host << " " <<
@@ -745,10 +747,7 @@ void multipleBrowsers::initCEFCallbacks(llCefBrowserHandle handle)
                           "is_proxy: " << isProxy
                          )
 
-        // fake credentials
-        username = "user";
-        password = "passwd";
-        return true;
+        mCefBrowserManager->RespondToAuthRequest(handle, requestId, true, "user", "passwd");
     });
 }
 
