@@ -315,12 +315,49 @@ bool llCefBrowser::OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFra
 {
     CEF_REQUIRE_UI_THREAD();
 
-    if (mOnOpenPopup)
+    // We don't support real multi-window/tab popups, so a target="_blank" link, an
+    // arbitrary new named target, or a window.open() call should all just navigate
+    // this same browser rather than leave the click to be bounced back up through
+    // mOnOpenPopup (which used to end up opening a brand new web_content floater on
+    // the Viewer side - the opposite of "navigate in the same window"). Loading it
+    // into the main frame directly and cancelling the actual popup handles that in
+    // one place, for every consumer of this library.
+    if (mCefBrowser)
     {
-        mOnOpenPopup(target_url.ToString(), target_frame_name.ToString());
+        mCefBrowser->GetMainFrame()->LoadURL(target_url);
     }
 
-    return true;  // cancel the popup - see SetOnOpenPopupCallback
+    return true;  // cancel the popup
+}
+
+bool llCefBrowser::StartDragging(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDragData> drag_data,
+                                 DragOperationsMask allowed_ops, int x, int y)
+{
+    CEF_REQUIRE_UI_THREAD();
+
+    if (! mCefBrowser)
+    {
+        return false;
+    }
+
+    mIsDragging = true;
+    mDragAllowedOps = allowed_ops;
+
+    CefMouseEvent event;
+    event.x = x;
+    event.y = y;
+    event.modifiers = mHeldMouseButtons;
+    mCefBrowser->GetHost()->DragTargetDragEnter(drag_data, event, allowed_ops);
+
+    return true;  // we're handling it - see DragSourceEndedAt/DragSourceSystemDragEnded below
+}
+
+void llCefBrowser::UpdateDragCursor(CefRefPtr<CefBrowser> browser, DragOperation operation)
+{
+    // No drag-specific cursor glyph (copy/move/link) for now - the regular
+    // OnCursorChange callback still covers ordinary cursor changes. Not part of
+    // the HTML5 drag-and-drop bug this was added for; fine to leave as a no-op
+    // until someone actually asks for it.
 }
 
 bool llCefBrowser::GetAuthCredentials(CefRefPtr<CefBrowser> browser, const CefString& originUrl,
@@ -1068,6 +1105,24 @@ void llCefBrowser::SendMouseClickEvent(int x, int y, llCefMouseButton button, bo
     event.x = x;
     event.y = y;
     event.modifiers = mHeldMouseButtons;
+
+    if (mIsDragging)
+    {
+        // Once StartDragging() has fired, CEF expects this gesture to keep arriving via
+        // DragTarget* calls, not ordinary clicks - see StartDragging's own comment. Left
+        // mouse-up is what ends it: drop the data into the page, then tell CEF the source
+        // side ended too (both are required - see DragSourceEndedAt's doc comment). Any
+        // other click while mid-drag is swallowed; CEF isn't expecting it either way.
+        if (mouseUp && button == llCefMouseButton::Left)
+        {
+            mCefBrowser->GetHost()->DragTargetDrop(event);
+            mCefBrowser->GetHost()->DragSourceEndedAt(x, y, mDragAllowedOps);
+            mCefBrowser->GetHost()->DragSourceSystemDragEnded();
+            mIsDragging = false;
+        }
+        return;
+    }
+
     mCefBrowser->GetHost()->SendMouseClickEvent(event, ToCefMouseButton(button), mouseUp, clickCount);
 }
 
@@ -1086,6 +1141,16 @@ void llCefBrowser::SendMouseMoveEvent(int x, int y, bool mouseLeave)
     event.x = x;
     event.y = y;
     event.modifiers = mHeldMouseButtons;
+
+    if (mIsDragging)
+    {
+        // See StartDragging's own comment - every move during a recognized HTML5 drag
+        // has to go through DragTargetDragOver instead, or the dragged element just
+        // freezes in place no matter how many ordinary move events arrive.
+        mCefBrowser->GetHost()->DragTargetDragOver(event, mDragAllowedOps);
+        return;
+    }
+
     mCefBrowser->GetHost()->SendMouseMoveEvent(event, mouseLeave);
 }
 

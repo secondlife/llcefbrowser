@@ -117,6 +117,19 @@ class llCefBrowser : public CefClient,
         void OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) override;
         void OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) override;
 
+        // HTML5 drag-and-drop (a draggable element, or the page's own built-in
+        // image/text-selection drag) - windowless rendering has no native OS drag
+        // loop for CEF to run, so these two plus the DragTarget*/DragSource* calls
+        // from SendMouseMoveEvent/SendMouseClickEvent below are what stand in for
+        // it. Without StartDragging returning true here, CEF aborts the drag the
+        // instant it starts (see its own doc comment) regardless of what mouse
+        // events follow - ordinary click-drag (scrollbars, text selection, via
+        // mHeldMouseButtons) is unaffected either way, since that never goes
+        // through this CEF subsystem at all.
+        bool StartDragging(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDragData> drag_data,
+                           DragOperationsMask allowed_ops, int x, int y) override;
+        void UpdateDragCursor(CefRefPtr<CefBrowser> browser, DragOperation operation) override;
+
         // --- CefDisplayHandler ---
         // See llCefBrowserManager::SetOnAddressChangeCallback.
         void OnAddressChange(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
@@ -617,6 +630,14 @@ class llCefBrowser : public CefClient,
         // recognizes a drag (scrollbar thumb, text selection, slider) - it just
         // sees an ordinary hover move.
         uint32_t mHeldMouseButtons = 0;
+
+        // Set true for the duration of a CEF-recognized HTML5 drag (between
+        // StartDragging() and the drop/cancel that ends it) - see StartDragging's
+        // own comment. While true, SendMouseMoveEvent/SendMouseClickEvent route
+        // through CefBrowserHost's DragTarget*/DragSource* calls instead of their
+        // normal Send*MouseEvent ones, per CEF's windowless-drag contract.
+        bool mIsDragging = false;
+        DragOperationsMask mDragAllowedOps = DRAG_OPERATION_NONE;
 
         // Last full PET_VIEW frame, kept independently of mPixels - mPixels is
         // a pull-based producer/consumer handoff with no way to peek at what
