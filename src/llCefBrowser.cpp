@@ -64,12 +64,12 @@ namespace {
 }  // namespace
 
 llCefBrowser::llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager,
-                           std::string initialUrl)
+                           std::string initialUrl, bool isUI)
     // Clamped to a minimum of 1: a 0/negative size here would flow straight
     // into mPixels' w*h*4 byte-count calculation and underflow to a huge
     // allocation.
     : mHandle(handle), mManager(manager), mWidth(std::max(width, 1)), mHeight(std::max(height, 1)),
-      mInitialUrl(std::move(initialUrl))
+      mIsUI(isUI), mInitialUrl(std::move(initialUrl))
 {
     mPixels.Resize(mWidth, mHeight);
 }
@@ -315,19 +315,32 @@ bool llCefBrowser::OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFra
 {
     CEF_REQUIRE_UI_THREAD();
 
-    // We don't support real multi-window/tab popups, so a target="_blank" link, an
-    // arbitrary new named target, or a window.open() call should all just navigate
-    // this same browser rather than leave the click to be bounced back up through
-    // mOnOpenPopup (which used to end up opening a brand new web_content floater on
-    // the Viewer side - the opposite of "navigate in the same window"). Loading it
-    // into the main frame directly and cancelling the actual popup handles that in
-    // one place, for every consumer of this library.
-    if (mCefBrowser)
+    // We don't support real multi-window/tab popups either way, but what should
+    // happen to the click differs by mIsUI:
+    //
+    // - Prim media has no concept of a second "tab" to put a popup in, so a
+    //   target="_blank" link, an arbitrary new named target, or a window.open()
+    //   call should just navigate this same browser in place.
+    // - UI media (a 2D floater) DOES have somewhere sensible for it to go: the
+    //   Viewer's own web_content floater, or the system browser, depending on
+    //   the user's "Preferred browser" preference (see LLWeb::loadURL() in
+    //   llweb.cpp, which already implements exactly this and predates the
+    //   embedded browser entirely - it's the same call the old CEF media
+    //   plugin always used). Forward it up via mOnOpenPopup, same as before
+    //   this override existed, and let the app decide.
+    if (mIsUI)
+    {
+        if (mOnOpenPopup)
+        {
+            mOnOpenPopup(target_url.ToString(), target_frame_name.ToString());
+        }
+    }
+    else if (mCefBrowser)
     {
         mCefBrowser->GetMainFrame()->LoadURL(target_url);
     }
 
-    return true;  // cancel the popup
+    return true;  // cancel the popup either way - never a real new CEF window/tab
 }
 
 bool llCefBrowser::StartDragging(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDragData> drag_data,

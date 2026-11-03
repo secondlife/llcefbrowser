@@ -57,7 +57,7 @@ class llCefBrowser : public CefClient,
         // itself -- see OnAfterCreated()'s own comment for why; loaded as a
         // follow-up LoadURL() instead, once the real CefBrowser exists.
         llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager,
-                     std::string initialUrl);
+                     std::string initialUrl, bool isUI);
 
         // Opaque per-browser scratch storage for whatever the app wants to find
         // again given just a handle - see llCefBrowserManager::SetUserData.
@@ -610,6 +610,15 @@ class llCefBrowser : public CefClient,
         llCefBrowserPixelBuffer mPixels;
         int mWidth;
         int mHeight;
+
+        // Set once at construction from llCefBrowserManager::CreateBrowser's own isUI
+        // param - true for a 2D UI floater (web_content, search, profile, etc.), false
+        // for media on a prim. OnBeforePopup uses this to decide whether a popup click
+        // has somewhere sensible to go (a new UI floater, or the system browser - see
+        // mOnOpenPopup) or should just navigate in place (prim media has no concept of
+        // a second "tab" to put it in).
+        const bool mIsUI;
+
         bool mCloseRequested = false;
 
         // See OnAfterCreated()'s own comment -- loaded there as a follow-up

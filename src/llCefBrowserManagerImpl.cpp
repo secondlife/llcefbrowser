@@ -162,7 +162,7 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
 
     llCefBrowserHandle handle{index, slot.mGeneration};
 
-    CefRefPtr<llCefBrowser> browserClient = new llCefBrowser(handle, width, height, this, url);
+    CefRefPtr<llCefBrowser> browserClient = new llCefBrowser(handle, width, height, this, url, isUI);
     slot.mBrowser = browserClient;
 
     CefWindowInfo windowInfo;
