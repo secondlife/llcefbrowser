@@ -636,6 +636,17 @@ void singleBrowser::update()
     // own doc comment).
     mCefBrowserManager->RequestRepaint(mCefBrowser);
 
+    if (mStressTestSetFrameRate)
+    {
+        // See the Actions menu item's own comment -- alternates every frame,
+        // deliberately far exceeding any real-world calling rate, to find
+        // out whether disruption shows up at a stress-test frequency that a
+        // slow manual click test never could.
+        static bool high = true;
+        mCefBrowserManager->SetFrameRate(mCefBrowser, high ? 60 : 5);
+        high = !high;
+    }
+
     if (mPageChanged)
     {
         mPageChanged = false;
@@ -838,6 +849,18 @@ void singleBrowser::updateUI()
                 // restore below) rather than 30fps, which is too close to
                 // 60fps to judge visually with any confidence.
                 mCefBrowserManager->SetFrameRate(mCefBrowser, 5);
+            }
+            if (ImGui::MenuItem("Stress Test SetFrameRate (every frame)", nullptr, mStressTestSetFrameRate))
+            {
+                // Manual clicking tops out at roughly once per second --
+                // nowhere near how often several real, rapidly-tier-flipping
+                // media instances triggered this in the field (driven by the
+                // Viewer's own per-frame priority recomputation). This calls
+                // it every single app frame instead, alternating 5/60fps, to
+                // deliberately exceed that real-world rate and see whether
+                // disruption shows up here that a slow manual click never
+                // could.
+                mStressTestSetFrameRate = !mStressTestSetFrameRate;
             }
             if (ImGui::MenuItem("Test SetFrameRate (restore 60fps)"))
             {
