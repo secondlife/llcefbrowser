@@ -303,13 +303,34 @@ class llCefBrowser : public CefClient,
 
         void SetSize(int w, int h, bool clearImmediately = false);
 
-        // REVERTED to a no-op (2026-11-09): External Begin Frame mode is disabled
-        // project-wide again (see llCefBrowserManagerImpl::CreateBrowser()'s
-        // external_begin_frame_enabled, now false) after it was found to break
-        // click/hover on content with its own internal hit-testing/gesture logic
-        // (Google Maps POI clicks/hover). See this method's own .cpp comment and
-        // external_begin_frame_enabled's comment for the full history before
-        // re-enabling this.
+        // Requests a new compositor frame right now, rather than waiting for CEF's own
+        // windowless_frame_rate-driven internal timer to eventually get around to one --
+        // see llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
+        // setting, which this requires. A no-op if the browser hasn't been created yet.
+        //
+        // Internally rate-limited to a flat 60fps regardless of how often this is
+        // called. llCefBrowserManagerImpl::Tick() already calls this unconditionally
+        // every main-loop tick as a mandatory safety net (callers have historically
+        // forgotten to call it themselves), and a caller may also call it explicitly
+        // right after processing input for lower latency -- between the two,
+        // real-world call rates have been measured as high as ~1000/sec on a tight
+        // producer loop. That's far faster than any real display's vsync, and isn't
+        // actually harmless the way it looks: confirmed via a real requestAnimationFrame-
+        // timing test (the Google Maps POI click/hover investigation, 2026-11-09) that
+        // flooding CEF's external-begin-frame path at that rate makes Blink's own rAF
+        // callback scheduling go bursty instead of steady, which broke page JS that
+        // depends on rAF ticking normally. This flat cap measurably reduced but didn't
+        // fully fix the burstiness (rAF settled to a clean ~31ms/~32fps instead of the
+        // ~16.6ms/60fps CEF's own internal timer achieves), and didn't fix the Maps
+        // click/hover bug itself -- which turns out to be tied to
+        // external_begin_frame_enabled being on at all, not to how well-paced the
+        // calls into it are (see that setting's own comment in
+        // llCefBrowserManagerImpl::CreateBrowser() for the full investigation, still
+        // open as of 2026-11-09). An OnPaint-acknowledgment-based version of this gate
+        // was also tried and reverted -- made panning visibly stutter, since OnPaint
+        // isn't guaranteed to fire for every request. Pacing centrally here means
+        // neither caller -- nor Tick()'s own unconditional call -- can flood it,
+        // without needing every call site to replicate its own pacing correctly.
         void SendExternalBeginFrame();
 
         int GetWidth() const {
@@ -634,6 +655,11 @@ class llCefBrowser : public CefClient,
         int mPendingWidth = -1;
         int mPendingHeight = -1;
         std::chrono::steady_clock::time_point mResizeRequestedAt;
+
+        // Caps how often SendExternalBeginFrame() actually reaches CEF -- see
+        // that method's own comment for why this has to live here rather than
+        // in each caller.
+        std::chrono::steady_clock::time_point mLastExternalBeginFrame;
 
         // Bitmask of CEF EVENTFLAG_*_MOUSE_BUTTON values for buttons currently
         // held down, updated by SendMouseClickEvent and stamped onto every
