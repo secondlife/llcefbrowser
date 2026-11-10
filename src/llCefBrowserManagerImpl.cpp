@@ -172,15 +172,36 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     // parent" value for both kinds of handle.
     windowInfo.SetAsWindowless(0);  // offscreen, no native parent window
 
-    // Compositing is driven explicitly (llCefBrowser::SendExternalBeginFrame(), called
-    // once per producer main-loop tick) rather than CEF's own windowless_frame_rate-
-    // paced internal timer -- that timer runs completely decoupled from when input
-    // actually arrives, so every interaction has to wait for CEF's own independently-
-    // scheduled next tick before any repaint even begins (confirmed via measurement:
-    // input-to-repaint gaps clustered in discrete bands near 1x/2x/3x the timer's own
-    // period, the signature of a fixed-rate scheduler rather than input-driven
-    // rendering). Driving it ourselves, right after processing each tick's input,
-    // removes that scheduling gap.
+    // External Begin Frame mode: compositing driven explicitly
+    // (llCefBrowser::SendExternalBeginFrame(), called once per producer main-loop
+    // tick) rather than CEF's own windowless_frame_rate-paced internal timer --
+    // that timer runs completely decoupled from when input actually arrives, so
+    // every interaction has to wait for CEF's own independently-scheduled next
+    // tick before any repaint even begins (confirmed via measurement: input-to-
+    // repaint gaps clustered in discrete bands near 1x/2x/3x the timer's own
+    // period). This measurably helped scroll latency when added (2026-08-14) --
+    // the proportion of near-instant (<2ms) input-to-repaint responses roughly
+    // doubled.
+    //
+    // KNOWN ISSUE (found 2026-11-09, unresolved): this mode breaks click/hover
+    // on content with its own internal hit-testing/gesture logic -- Google Maps
+    // POI clicks/hover never register with this mode on, work correctly with it
+    // off, on both Windows and macOS (legacy Dullahan-based CEF, which never
+    // enables this mode, behaves correctly; this backend didn't). Three
+    // different SendExternalBeginFrame() calling-pattern fixes were tried and
+    // live-tested (unrestricted ~1000Hz flooding -> a flat 60fps wall-clock cap
+    // -> an OnPaint-acknowledgment-based gate) and none fixed the click/hover
+    // bug, which argues this is tied to the mode being enabled at all, not to
+    // how well-paced the calls into it are -- see SendExternalBeginFrame()'s own
+    // .cpp comment for that history.
+    //
+    // Disabling this mode was considered and rejected: the distance/priority
+    // render-throttle feature (kSetRenderRate, see llcefproducer.cpp's
+    // target_fps gating) only has any effect because of this mode -- it works
+    // by calling SendExternalBeginFrame() less often for low-priority media;
+    // with this mode off, CEF just paints on its own fixed internal timer
+    // regardless, so disabling this would silently also disable that CPU/GPU-
+    // saving feature. Kept enabled; the click/hover bug is still open.
     windowInfo.external_begin_frame_enabled = true;
 
     const llCefBrowserLibInitOptions& options = LLGetInitOptions();

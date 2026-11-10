@@ -303,10 +303,13 @@ class llCefBrowser : public CefClient,
 
         void SetSize(int w, int h, bool clearImmediately = false);
 
-        // Requests a new compositor frame right now, rather than waiting for CEF's own
-        // windowless_frame_rate-driven internal timer to eventually get around to one --
-        // see llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
-        // setting, which this requires. A no-op if the browser hasn't been created yet.
+        // REVERTED to a no-op (2026-11-09): External Begin Frame mode is disabled
+        // project-wide again (see llCefBrowserManagerImpl::CreateBrowser()'s
+        // external_begin_frame_enabled, now false) after it was found to break
+        // click/hover on content with its own internal hit-testing/gesture logic
+        // (Google Maps POI clicks/hover). See this method's own .cpp comment and
+        // external_begin_frame_enabled's comment for the full history before
+        // re-enabling this.
         void SendExternalBeginFrame();
 
         int GetWidth() const {

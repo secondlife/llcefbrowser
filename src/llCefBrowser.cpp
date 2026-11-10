@@ -1312,10 +1312,28 @@ void llCefBrowser::CheckResizeWatchdog()
 
 void llCefBrowser::SendExternalBeginFrame()
 {
-    if (mCefBrowser)
-    {
-        mCefBrowser->GetHost()->SendExternalBeginFrame();
-    }
+    // REVERTED (2026-11-09): External Begin Frame mode itself (see
+    // llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled,
+    // now back to false) is disabled project-wide again, trading back the
+    // scroll-latency improvement it gave in exchange for correct click/hover
+    // behavior on content with its own internal hit-testing/gesture logic
+    // (confirmed real bug via Google Maps POI clicks/hover never registering
+    // only with this mode on). Three different calling-pattern fixes here --
+    // unrestricted, a flat 60fps wall-clock cap, and an OnPaint-acknowledgment-
+    // based gate -- were each live-tested and none fixed the underlying bug,
+    // which argues it's tied to external_begin_frame_enabled being true at all,
+    // not to how well-paced the calls into it are. See llCefBrowserManagerImpl.h's
+    // own external_begin_frame_enabled comment for the full history (scroll-
+    // latency fix -> Maps regression found -> three failed calling-pattern
+    // fixes -> this revert) before re-enabling it.
+    //
+    // This method is now a deliberate no-op: CEF's own doc comment for
+    // SendExternalBeginFrame() says it's "only valid when
+    // external_begin_frame_enabled is set to true", so simply doing nothing
+    // here (rather than threading a flag through to gate it, or removing the
+    // call sites in Tick()'s safety net and each producer) is the safest,
+    // least invasive way to stop calling into CEF for something that's no
+    // longer valid, without needing to touch any caller.
 }
 
 void llCefBrowser::SetSize(int w, int h, bool clearImmediately)
