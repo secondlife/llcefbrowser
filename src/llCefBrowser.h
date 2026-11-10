@@ -315,6 +315,11 @@ class llCefBrowser : public CefClient,
         // why the old SendExternalBeginFrame()-gating approach stopped
         // working once that mode was disabled). CEF's own minimum is 1, no
         // stated maximum; a no-op if the browser hasn't been created yet.
+        //
+        // CAUTION: see this method's own comment in the public
+        // include/llCefBrowserManager.h for a real connection-churn
+        // regression found when this was wired into the live priority
+        // system (2026-11-10) -- test in isolation before doing that again.
         void SetFrameRate(int fps);
 
         // Requests a new compositor frame right now via CefBrowserHost::Invalidate(),
