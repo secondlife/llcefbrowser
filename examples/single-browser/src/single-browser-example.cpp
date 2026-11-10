@@ -543,7 +543,7 @@ void singleBrowser::init()
     initOptions.rootCachePath = default_root_cache_path.string();
     initOptions.logFile = default_log_file.string();
     initOptions.userAgentProduct = "llCefBrowser: SingleBrowser";
-    initOptions.externalBeginFrameEnabled = false;
+    initOptions.externalBeginFrameEnabled = true;
 #if defined(__APPLE__)
     // Not a real .app bundle -- point CEF straight at the framework it was
     // built against (see LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR's own
@@ -824,6 +824,21 @@ void singleBrowser::updateUI()
             if (ImGui::MenuItem("Execute Test JavaScript"))
             {
                 mCefBrowserManager->ExecuteJavaScript(mCefBrowser, "document.body.style.backgroundColor = 'red';");
+            }
+            if (ImGui::MenuItem("Test SetFrameRate (30fps)"))
+            {
+                // Isolation test for a real connection-churn regression found
+                // wiring this into the Viewer's live priority system (see
+                // SetFrameRate()'s own comment) -- fires exactly once per
+                // click here, so you can watch a continuously-changing page
+                // (a clock, a video, Google Maps) for any visible disruption
+                // from a single call, before concluding whether the problem
+                // is the API itself or only calling it too frequently.
+                mCefBrowserManager->SetFrameRate(mCefBrowser, 30);
+            }
+            if (ImGui::MenuItem("Test SetFrameRate (restore 60fps)"))
+            {
+                mCefBrowserManager->SetFrameRate(mCefBrowser, 60);
             }
 
             // Resize test is hard to implement here because
