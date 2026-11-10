@@ -303,35 +303,36 @@ class llCefBrowser : public CefClient,
 
         void SetSize(int w, int h, bool clearImmediately = false);
 
-        // Requests a new compositor frame right now, rather than waiting for CEF's own
-        // windowless_frame_rate-driven internal timer to eventually get around to one --
-        // see llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
-        // setting, which this requires. A no-op if the browser hasn't been created yet.
+        // Requests a new compositor frame right now via CefBrowserHost::Invalidate(),
+        // rather than waiting for CEF's own windowless_frame_rate-driven internal timer
+        // to eventually get around to one. A no-op if the browser hasn't been created
+        // yet.
+        //
+        // Replaces an earlier SendExternalBeginFrame()-based version of this same idea
+        // (requires CefWindowInfo::external_begin_frame_enabled = true) -- that mode was
+        // found (the Google Maps POI click/hover investigation, 2026-11-09) to break
+        // DOM hit-testing/click on WebGL canvas content, and three different calling-
+        // pattern fixes to it (unrestricted, a flat rate cap, an OnPaint-acknowledgment
+        // gate) all failed to fix that bug, arguing it's tied to the mode being enabled
+        // at all. Invalidate() is documented by CEF as a general windowless-rendering
+        // repaint-request mechanism with no stated dependency on external-begin-frame
+        // mode at all (see cef_browser.h's own doc comments for both methods) -- this
+        // is the next real attempt: get the latency win Invalidate()'s on-demand repaint
+        // should still provide, without ever enabling the mode that broke hit-testing.
+        // See llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
+        // comment for the full history before reverting back to the old approach.
         //
         // Internally rate-limited to a flat 60fps regardless of how often this is
-        // called. llCefBrowserManagerImpl::Tick() already calls this unconditionally
-        // every main-loop tick as a mandatory safety net (callers have historically
-        // forgotten to call it themselves), and a caller may also call it explicitly
-        // right after processing input for lower latency -- between the two,
-        // real-world call rates have been measured as high as ~1000/sec on a tight
-        // producer loop. That's far faster than any real display's vsync, and isn't
-        // actually harmless the way it looks: confirmed via a real requestAnimationFrame-
-        // timing test (the Google Maps POI click/hover investigation, 2026-11-09) that
-        // flooding CEF's external-begin-frame path at that rate makes Blink's own rAF
-        // callback scheduling go bursty instead of steady, which broke page JS that
-        // depends on rAF ticking normally. This flat cap measurably reduced but didn't
-        // fully fix the burstiness (rAF settled to a clean ~31ms/~32fps instead of the
-        // ~16.6ms/60fps CEF's own internal timer achieves), and didn't fix the Maps
-        // click/hover bug itself -- which turns out to be tied to
-        // external_begin_frame_enabled being on at all, not to how well-paced the
-        // calls into it are (see that setting's own comment in
-        // llCefBrowserManagerImpl::CreateBrowser() for the full investigation, still
-        // open as of 2026-11-09). An OnPaint-acknowledgment-based version of this gate
-        // was also tried and reverted -- made panning visibly stutter, since OnPaint
-        // isn't guaranteed to fire for every request. Pacing centrally here means
-        // neither caller -- nor Tick()'s own unconditional call -- can flood it,
-        // without needing every call site to replicate its own pacing correctly.
-        void SendExternalBeginFrame();
+        // called, same reasoning as before: llCefBrowserManagerImpl::Tick() already
+        // calls this unconditionally every main-loop tick as a mandatory safety net
+        // (callers have historically forgotten to call it themselves), and a caller may
+        // also call it explicitly right after processing input for lower latency --
+        // between the two, real-world call rates have been measured as high as
+        // ~1000/sec on a tight producer loop, far faster than any real display's vsync.
+        // Pacing centrally here means neither caller -- nor Tick()'s own unconditional
+        // call -- can flood it, without needing every call site to replicate its own
+        // pacing correctly.
+        void RequestRepaint();
 
         int GetWidth() const {
             return mWidth;
@@ -656,10 +657,10 @@ class llCefBrowser : public CefClient,
         int mPendingHeight = -1;
         std::chrono::steady_clock::time_point mResizeRequestedAt;
 
-        // Caps how often SendExternalBeginFrame() actually reaches CEF -- see
-        // that method's own comment for why this has to live here rather than
-        // in each caller.
-        std::chrono::steady_clock::time_point mLastExternalBeginFrame;
+        // Caps how often RequestRepaint() actually reaches CEF -- see that
+        // method's own comment for why this has to live here rather than in
+        // each caller.
+        std::chrono::steady_clock::time_point mLastRepaintRequest;
 
         // Bitmask of CEF EVENTFLAG_*_MOUSE_BUTTON values for buttons currently
         // held down, updated by SendMouseClickEvent and stamped onto every

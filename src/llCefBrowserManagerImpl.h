@@ -73,7 +73,7 @@ class llCefBrowserManagerImpl {
 
         void ResizeBrowser(llCefBrowserHandle handle, int width, int height, bool clearImmediately);
 
-        void SendExternalBeginFrame(llCefBrowserHandle handle);
+        void RequestRepaint(llCefBrowserHandle handle);
 
         bool CopyLatestFrame(llCefBrowserHandle handle, std::vector<uint8_t>& dst, int& w, int& h);
 

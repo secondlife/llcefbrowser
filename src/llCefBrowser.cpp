@@ -1310,7 +1310,7 @@ void llCefBrowser::CheckResizeWatchdog()
     }
 }
 
-void llCefBrowser::SendExternalBeginFrame()
+void llCefBrowser::RequestRepaint()
 {
     if (!mCefBrowser)
     {
@@ -1319,16 +1319,16 @@ void llCefBrowser::SendExternalBeginFrame()
 
     // See this method's own header comment -- rate-limited here, centrally,
     // regardless of how often or from how many places it's called.
-    static constexpr double kMaxExternalBeginFrameFps = 60.0;
+    static constexpr double kMaxRepaintRequestFps = 60.0;
     const auto now = std::chrono::steady_clock::now();
-    if (mLastExternalBeginFrame.time_since_epoch().count() != 0 &&
-        now - mLastExternalBeginFrame < std::chrono::duration<double>(1.0 / kMaxExternalBeginFrameFps))
+    if (mLastRepaintRequest.time_since_epoch().count() != 0 &&
+        now - mLastRepaintRequest < std::chrono::duration<double>(1.0 / kMaxRepaintRequestFps))
     {
         return;
     }
-    mLastExternalBeginFrame = now;
+    mLastRepaintRequest = now;
 
-    mCefBrowser->GetHost()->SendExternalBeginFrame();
+    mCefBrowser->GetHost()->Invalidate(PET_VIEW);
 }
 
 void llCefBrowser::SetSize(int w, int h, bool clearImmediately)

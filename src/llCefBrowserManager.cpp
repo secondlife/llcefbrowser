@@ -99,9 +99,9 @@ void llCefBrowserManager::ResizeBrowser(llCefBrowserHandle handle, int width, in
     mImpl->ResizeBrowser(handle, width, height, clearImmediately);
 }
 
-void llCefBrowserManager::SendExternalBeginFrame(llCefBrowserHandle handle)
+void llCefBrowserManager::RequestRepaint(llCefBrowserHandle handle)
 {
-    mImpl->SendExternalBeginFrame(handle);
+    mImpl->RequestRepaint(handle);
 }
 
 bool llCefBrowserManager::CopyLatestFrame(llCefBrowserHandle handle, std::vector<uint8_t>& dst, int& w, int& h)
