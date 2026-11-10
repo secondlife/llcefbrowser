@@ -358,6 +358,21 @@ class llCefBrowser : public CefClient,
         // pacing correctly.
         void RequestRepaint();
 
+        // Mirrors cefclient's OsrRenderHandlerWin::TriggerBeginFrame() exactly
+        // (see that method's own comment in llCefBrowser.cpp for the real
+        // reason this exists). lastTime/delayUs are in the same units
+        // cefclient uses (microseconds), just via std::chrono instead of raw
+        // uint64_t/float, to directly test whether CEF-task-queue-scheduled
+        // timing (vs. an external caller polling wall-clock time) is itself
+        // the thing that makes SendExternalBeginFrame()-driven hit-testing
+        // work correctly in cefclient's own OSR+EBF sample but not here.
+        // Public (like CheckResizeWatchdog()) rather than private+friend,
+        // matching this class's existing pattern for internal-only methods
+        // meant to be called from this same .cpp's own CefTask helpers
+        // (BeginFrameTimerTask here) -- llCefBrowser.h is itself an internal
+        // header, not part of this library's external API surface.
+        void TriggerBeginFrame(std::chrono::steady_clock::time_point lastTime, double delayUs);
+
         int GetWidth() const {
             return mWidth;
         }
@@ -697,16 +712,6 @@ class llCefBrowser : public CefClient,
         // replica of cefclient's precisely CEF-task-queue-scheduled timing,
         // instead of an external caller polling elapsed wall-clock time).
         bool mBeginFramePending = false;
-
-        // Mirrors cefclient's OsrRenderHandlerWin::TriggerBeginFrame() exactly
-        // (see that method's own comment in llCefBrowser.cpp for the real
-        // reason this exists). lastTime/delayUs are in the same units
-        // cefclient uses (microseconds), just via std::chrono instead of raw
-        // uint64_t/float, to directly test whether CEF-task-queue-scheduled
-        // timing (vs. an external caller polling wall-clock time) is itself
-        // the thing that makes SendExternalBeginFrame()-driven hit-testing
-        // work correctly in cefclient's own OSR+EBF sample but not here.
-        void TriggerBeginFrame(std::chrono::steady_clock::time_point lastTime, double delayUs);
 
         // Bitmask of CEF EVENTFLAG_*_MOUSE_BUTTON values for buttons currently
         // held down, updated by SendMouseClickEvent and stamped onto every
