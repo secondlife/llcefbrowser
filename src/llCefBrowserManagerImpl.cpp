@@ -172,57 +172,73 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     // parent" value for both kinds of handle.
     windowInfo.SetAsWindowless(0);  // offscreen, no native parent window
 
-    // External Begin Frame mode: OFF (see history below). Compositing goes
-    // back through CEF's own windowless_frame_rate-paced internal timer, plus
-    // on-demand llCefBrowser::RequestRepaint() calls (CefBrowserHost::Invalidate(),
-    // NOT SendExternalBeginFrame() -- see RequestRepaint()'s own comment) for
-    // lower input-to-repaint latency than the internal timer alone provides.
-    //
-    // HISTORY: this was `true` from 2026-08-14 (added for scroll latency --
-    // CEF's internal timer runs completely decoupled from when input arrives,
-    // confirmed via measurement to cluster input-to-repaint gaps in discrete
-    // bands near 1x/2x/3x the timer's own period; External Begin Frame mode,
-    // driven once per producer tick, measurably doubled the proportion of
-    // near-instant (<2ms) responses) until 2026-11-09, when it was found to
-    // break DOM hit-testing/click on WebGL canvas content -- Google Maps POI
-    // clicks/hover never registered with this mode on, worked correctly with
-    // it off, on both Windows and macOS (legacy Dullahan-based CEF, which
-    // never enables this mode, behaves correctly; this backend didn't).
-    // Three different SendExternalBeginFrame() calling-pattern fixes were
-    // tried and live-tested (unrestricted ~1000Hz flooding -> a flat 60fps
-    // wall-clock cap -> an OnPaint-acknowledgment-based gate) and none fixed
-    // the click/hover bug, arguing it's tied to the mode being enabled at
-    // all, not to how well-paced the calls into it are. Filed upstream
-    // (chromiumembedded/cef's GitHub issue tracker), no response yet.
-    //
-    // Switched to Invalidate()-based RequestRepaint() instead of disabling
-    // the whole idea outright, since CEF's own doc comment for Invalidate()
-    // states no dependency on external-begin-frame mode at all, unlike
-    // SendExternalBeginFrame()'s explicit "only valid when
-    // external_begin_frame_enabled is true". Confirmed 2026-11-10: Maps POI
-    // click/hover now works correctly (highlight-on-hover and click both
-    // register), live-tested via a local lib swap. Scroll/pan latency
-    // reported as "about the same, maybe slightly slower" than with External
-    // Begin Frame on -- a subjective read, not a hard measurement; worth
-    // re-running the original rAF/input-to-repaint timing methodology from
-    // the scroll-latency investigation if a more rigorous answer is needed,
-    // but not done as of this writing.
-    //
-    // GAP this reintroduced, now RESOLVED differently: the distance/priority
-    // render-throttle feature (kSetRenderRate, see llcefproducer.cpp) was
-    // built around External Begin Frame being the *sole* driver of repaints
-    // -- gating how often SendExternalBeginFrame() was called was the only
-    // per-browser repaint-rate control that existed, so disabling this mode
-    // initially broke that throttle's real CPU/GPU-saving effect (CEF's
-    // internal timer composited every browser at the same rate regardless of
-    // the old gating). Fixed properly via llCefBrowser::SetFrameRate()
-    // (CefBrowserHost::SetWindowlessFrameRate(), callable at runtime -- a
-    // better mechanism than the old one anyway, since it directly controls
-    // CEF's own real paint rate per browser instead of indirectly throttling
-    // by withholding repaint requests).
-    windowInfo.external_begin_frame_enabled = false;
-
     const llCefBrowserLibInitOptions& options = LLGetInitOptions();
+
+    // External Begin Frame mode: OFF by default (options.externalBeginFrameEnabled,
+    // see that field's own comment) -- an explicit, named toggle rather than a
+    // hardcoded value, kept specifically so the two repaint-driving mechanisms
+    // can still be A/B tested with everything else held identical. Compositing
+    // defaults to CEF's own windowless_frame_rate-paced internal timer, plus
+    // on-demand llCefBrowser::RequestRepaint() calls (CefBrowserHost::Invalidate(),
+    // NOT SendExternalBeginFrame() when this option is false -- see
+    // RequestRepaint()'s own comment) for lower input-to-repaint latency than
+    // the internal timer alone provides.
+    //
+    // HISTORY: this was unconditionally `true` from 2026-08-14 (added for
+    // scroll latency -- CEF's internal timer runs completely decoupled from
+    // when input arrives, confirmed via measurement to cluster input-to-repaint
+    // gaps in discrete bands near 1x/2x/3x the timer's own period; External
+    // Begin Frame mode, driven once per producer tick, measurably doubled the
+    // proportion of near-instant (<2ms) responses) until 2026-11-09, when it
+    // was found to break DOM hit-testing/click on WebGL canvas content --
+    // Google Maps POI clicks/hover never registered with this mode on, worked
+    // correctly with it off, on both Windows and macOS (legacy Dullahan-based
+    // CEF, which never enables this mode, behaves correctly; this backend
+    // didn't). Three different SendExternalBeginFrame() calling-pattern fixes
+    // were tried and live-tested (unrestricted ~1000Hz flooding -> a flat
+    // 60fps wall-clock cap -> an OnPaint-acknowledgment-based gate) and none
+    // fixed the click/hover bug, arguing it's tied to the mode being enabled
+    // at all, not to how well-paced the calls into it are. Filed upstream
+    // (chromiumembedded/cef's GitHub issue tracker); a maintainer suggested
+    // testing the official `cefclient` sample with
+    // --off-screen-rendering-enabled --external-begin-frame-enabled, which
+    // works correctly on Google Maps -- but reading its actual source
+    // (tests/cefclient/browser/osr_render_handler_win.cc) shows it renders via
+    // OnAcceleratedPaint() (GPU shared-texture path) when driving this mode,
+    // not the plain CPU-buffer OnPaint() path this library uses, so this may
+    // not be a fair comparison -- not confirmed either way. Switching to
+    // OnAcceleratedPaint() would be the more faithful fix if the GPU-texture
+    // theory holds, but isn't attempted here (shared textures don't work on
+    // all hardware; on the list for later, not a near-term fix).
+    //
+    // Switched the DEFAULT to Invalidate()-based RequestRepaint() instead of
+    // deleting the SendExternalBeginFrame()-based mode outright, since CEF's
+    // own doc comment for Invalidate() states no dependency on external-
+    // begin-frame mode at all, unlike SendExternalBeginFrame()'s explicit
+    // "only valid when external_begin_frame_enabled is true". Confirmed
+    // 2026-11-10: Maps POI click/hover now works correctly with the default
+    // (highlight-on-hover and click both register), live-tested via a local
+    // lib swap. Scroll/pan latency reported as "about the same, maybe
+    // slightly slower" than with External Begin Frame on -- a subjective
+    // read, not a hard measurement.
+    //
+    // GAP the default reintroduces, NOT YET RESOLVED (a fix was tried and
+    // reverted): the distance/priority render-throttle feature
+    // (kSetRenderRate, see llcefproducer.cpp) was built around External Begin
+    // Frame being the *sole* driver of repaints -- gating how often
+    // SendExternalBeginFrame() was called was the only per-browser repaint-
+    // rate control that existed, so disabling this mode by default broke
+    // that throttle's real CPU/GPU-saving effect (CEF's internal timer
+    // composites every browser at the same rate regardless of the old
+    // gating). A direct fix via llCefBrowser::SetFrameRate() (CefBrowserHost::
+    // SetWindowlessFrameRate(), callable at runtime) was tried and reverted
+    // the same day -- live-tested with several same-priority media instances
+    // competing for a small number of "full rate" slots (so tiers flipped
+    // frequently as their near-identical interest values jittered frame to
+    // frame), calling that method was enough to cause a connection-churn/
+    // reconnect-loop regression. See that method's own comment for the
+    // caution note before trying again.
+    windowInfo.external_begin_frame_enabled = options.externalBeginFrameEnabled;
 
     CefBrowserSettings browserSettings;
     browserSettings.windowless_frame_rate = options.windowlessFrameRate;
@@ -941,19 +957,22 @@ void llCefBrowserManagerImpl::Tick()
         {
             slot.mBrowser->CheckResizeWatchdog();
 
-            // Unlike the old SendExternalBeginFrame()-based version of this
-            // (external_begin_frame_enabled now back to false, see
-            // CreateBrowser()), this is no longer strictly mandatory for a
-            // browser to render at all -- CEF's own windowless_frame_rate-
-            // paced internal timer still composites frames on its own
-            // regardless of whether this is ever called. It's kept here as a
-            // baseline anyway, folded in because Tick() is already
-            // unconditionally called every tick by everything that uses this
-            // library: a call here costs nothing when nothing changed, and an
-            // explicit call right after processing input (see
-            // SLCefProducer.cpp's own call site) still gets the repaint
-            // sooner than wherever in the caller's own loop Tick() happens to
-            // run, rather than waiting for CEF's internal timer's next tick.
+            // Whether this is strictly mandatory depends on
+            // llCefBrowserLibInitOptions::externalBeginFrameEnabled (see that
+            // field's and CreateBrowser()'s own comments): with it false (the
+            // default), CEF's own windowless_frame_rate-paced internal timer
+            // still composites frames on its own regardless of whether this
+            // is ever called, so this is just an optional latency
+            // improvement; with it true, CEF does NOT composite on its own
+            // at all, so this becomes the only thing driving any repaint,
+            // same as the old SendExternalBeginFrame()-only-mode behavior.
+            // Either way it's kept here as a baseline, folded in because
+            // Tick() is already unconditionally called every tick by
+            // everything that uses this library: a call here costs nothing
+            // when nothing changed, and an explicit call right after
+            // processing input (see SLCefProducer.cpp's own call site) still
+            // gets the repaint sooner than wherever in the caller's own loop
+            // Tick() happens to run.
             slot.mBrowser->RequestRepaint();
         }
     }

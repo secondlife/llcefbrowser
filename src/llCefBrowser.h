@@ -327,19 +327,24 @@ class llCefBrowser : public CefClient,
         // to eventually get around to one. A no-op if the browser hasn't been created
         // yet.
         //
-        // Replaces an earlier SendExternalBeginFrame()-based version of this same idea
-        // (requires CefWindowInfo::external_begin_frame_enabled = true) -- that mode was
-        // found (the Google Maps POI click/hover investigation, 2026-11-09) to break
-        // DOM hit-testing/click on WebGL canvas content, and three different calling-
-        // pattern fixes to it (unrestricted, a flat rate cap, an OnPaint-acknowledgment
-        // gate) all failed to fix that bug, arguing it's tied to the mode being enabled
-        // at all. Invalidate() is documented by CEF as a general windowless-rendering
-        // repaint-request mechanism with no stated dependency on external-begin-frame
-        // mode at all (see cef_browser.h's own doc comments for both methods) -- this
-        // is the next real attempt: get the latency win Invalidate()'s on-demand repaint
-        // should still provide, without ever enabling the mode that broke hit-testing.
-        // See llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
-        // comment for the full history before reverting back to the old approach.
+        // An earlier SendExternalBeginFrame()-based version of this same idea (requires
+        // CefWindowInfo::external_begin_frame_enabled = true) was found (the Google Maps
+        // POI click/hover investigation, 2026-11-09) to break DOM hit-testing/click on
+        // WebGL canvas content, and three different calling-pattern fixes to it
+        // (unrestricted, a flat rate cap, an OnPaint-acknowledgment gate) all failed to
+        // fix that bug, arguing it's tied to the mode being enabled at all. Invalidate()
+        // is documented by CEF as a general windowless-rendering repaint-request
+        // mechanism with no stated dependency on external-begin-frame mode at all (see
+        // cef_browser.h's own doc comments for both methods), and is now the default --
+        // confirmed to fix the Maps click/hover bug via live testing.
+        //
+        // Both mechanisms are still available, as an explicit, named toggle
+        // (llCefBrowserLibInitOptions::externalBeginFrameEnabled, see its own comment)
+        // rather than one being deleted outright -- this method calls whichever one
+        // that option selects, so the two can still be A/B tested with everything else
+        // (this rate limit, this call site) held identical. See
+        // llCefBrowserManagerImpl::CreateBrowser()'s external_begin_frame_enabled
+        // comment for the full history before flipping that option back to true.
         //
         // Internally rate-limited to a flat 60fps regardless of how often this is
         // called, same reasoning as before: llCefBrowserManagerImpl::Tick() already

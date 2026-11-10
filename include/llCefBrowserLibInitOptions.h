@@ -148,6 +148,23 @@ struct llCefBrowserLibInitOptions
     // this library has no per-browser settings override, so every browser
     // it creates shares one configuration.
     int windowlessFrameRate = 60;  // fps for CefRenderHandler::OnPaint; CEF's own default is 30
+
+    // Which mechanism llCefBrowser::RequestRepaint() uses to drive repainting,
+    // and whether CefWindowInfo::external_begin_frame_enabled is set at
+    // browser creation (see llCefBrowserManagerImpl::CreateBrowser()'s own
+    // comment for the full history). false (the default, used by every real
+    // consumer of this library as of 2026-11-10): RequestRepaint() calls
+    // CefBrowserHost::Invalidate(), and CEF's own internal windowless_frame_rate
+    // timer composites regardless. true: RequestRepaint() calls CefBrowserHost::
+    // SendExternalBeginFrame() instead (only valid with this mode enabled), and
+    // CEF never composites except in response to that call -- found to break
+    // DOM hit-testing/click on WebGL canvas content (confirmed repro: Google
+    // Maps POI markers), independent of how that call is paced. Exists as an
+    // explicit, named toggle (not just deleted outright) so this can still be
+    // A/B tested -- e.g. against a future CEF version, or to help narrow down
+    // the upstream bug further -- with everything else (pacing, call site)
+    // held identical between the two modes.
+    bool externalBeginFrameEnabled = false;
     llCefFeatureState javascript = llCefFeatureState::Default;
     llCefFeatureState javascriptAccessClipboard = llCefFeatureState::Default;
     llCefFeatureState imageLoading = llCefFeatureState::Default;

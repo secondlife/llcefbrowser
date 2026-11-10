@@ -106,13 +106,18 @@ class llCefBrowserManager {
         // true forces an immediate blank frame at the new size instead.
         void ResizeBrowser(llCefBrowserHandle handle, int width, int height, bool clearImmediately = false);
 
-        // Requests a new compositor frame right now (via CefBrowserHost::Invalidate()),
-        // rather than waiting for CEF's own windowless_frame_rate-paced internal timer
-        // to eventually get around to one. Unlike an earlier SendExternalBeginFrame()-
-        // based version of this same idea, this does NOT require any special browser-
-        // creation setting -- CEF composites via its own internal timer regardless, so
-        // calling this is purely an optional latency improvement, not a prerequisite
-        // for a browser to render at all.
+        // Requests a new compositor frame right now. By default (see
+        // llCefBrowserLibInitOptions::externalBeginFrameEnabled, an explicit, named
+        // toggle for this) this calls CefBrowserHost::Invalidate(), which does NOT
+        // require any special browser-creation setting -- CEF composites via its own
+        // internal timer regardless, so calling this is purely an optional latency
+        // improvement, not a prerequisite for a browser to render at all. Setting that
+        // option to true switches this to CefBrowserHost::SendExternalBeginFrame()
+        // instead (only valid with that mode enabled, under which CEF does NOT
+        // composite on its own) -- kept available as a real alternative rather than
+        // deleted, specifically so the two can still be A/B tested with everything
+        // else held identical; see that option's own comment for why Invalidate() is
+        // the default.
         //
         // Tick() already calls this for every live handle every tick as a baseline.
         // Call it yourself, in addition, only when you want a repaint sooner than

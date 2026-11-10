@@ -26,6 +26,7 @@
  */
 
 #include "llCefBrowser.h"
+#include "llCefBrowserLibInitOptionsAccess.h"
 #include "llCefBrowserManagerImpl.h"
 #include "llCefBrowserMessageRouterAccess.h"
 #include "include/cef_parser.h"
@@ -1328,7 +1329,22 @@ void llCefBrowser::RequestRepaint()
     }
     mLastRepaintRequest = now;
 
-    mCefBrowser->GetHost()->Invalidate(PET_VIEW);
+    // See llCefBrowserLibInitOptions::externalBeginFrameEnabled's own comment
+    // -- an explicit, named toggle between the two repaint-driving
+    // mechanisms, kept specifically so they can still be A/B tested with
+    // everything else (this same rate limit, this same call site) held
+    // identical. false (the default): Invalidate(), no dependency on
+    // external-begin-frame mode. true: SendExternalBeginFrame(), only valid
+    // when the browser was created with that mode enabled (see
+    // CreateBrowser()).
+    if (LLGetInitOptions().externalBeginFrameEnabled)
+    {
+        mCefBrowser->GetHost()->SendExternalBeginFrame();
+    }
+    else
+    {
+        mCefBrowser->GetHost()->Invalidate(PET_VIEW);
+    }
 }
 
 void llCefBrowser::SetFrameRate(int fps)
