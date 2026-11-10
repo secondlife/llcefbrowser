@@ -825,7 +825,7 @@ void singleBrowser::updateUI()
             {
                 mCefBrowserManager->ExecuteJavaScript(mCefBrowser, "document.body.style.backgroundColor = 'red';");
             }
-            if (ImGui::MenuItem("Test SetFrameRate (30fps)"))
+            if (ImGui::MenuItem("Test SetFrameRate (5fps)"))
             {
                 // Isolation test for a real connection-churn regression found
                 // wiring this into the Viewer's live priority system (see
@@ -833,8 +833,11 @@ void singleBrowser::updateUI()
                 // click here, so you can watch a continuously-changing page
                 // (a clock, a video, Google Maps) for any visible disruption
                 // from a single call, before concluding whether the problem
-                // is the API itself or only calling it too frequently.
-                mCefBrowserManager->SetFrameRate(mCefBrowser, 30);
+                // is the API itself or only calling it too frequently. 5fps
+                // (a dramatic, easy-to-see contrast against the 60fps
+                // restore below) rather than 30fps, which is too close to
+                // 60fps to judge visually with any confidence.
+                mCefBrowserManager->SetFrameRate(mCefBrowser, 5);
             }
             if (ImGui::MenuItem("Test SetFrameRate (restore 60fps)"))
             {
