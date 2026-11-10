@@ -1095,13 +1095,12 @@ void multipleBrowsers::update()
     llCefBrowserLib::DoMessageLoopWork();
     mCefBrowserManager->Tick();
 
-    // Required every tick, per live browser -- CreateBrowser() always uses
-    // external-begin-frame mode now (see SendExternalBeginFrame()'s own doc
-    // comment), so without this CEF never composites a frame at all for any
-    // of them: no error, just permanently black tiles.
+    // Optional, for lower-latency on-demand repaint per live browser --
+    // Tick() above already does this as a baseline every tick regardless
+    // (see RequestRepaint()'s own doc comment).
     mCefBrowserManager->ForEachBrowser([this](llCefBrowserHandle handle)
     {
-        mCefBrowserManager->SendExternalBeginFrame(handle);
+        mCefBrowserManager->RequestRepaint(handle);
     });
 }
 
