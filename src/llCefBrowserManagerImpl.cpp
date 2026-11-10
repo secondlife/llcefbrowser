@@ -199,25 +199,27 @@ llCefBrowserHandle llCefBrowserManagerImpl::CreateBrowser(const std::string& url
     // the whole idea outright, since CEF's own doc comment for Invalidate()
     // states no dependency on external-begin-frame mode at all, unlike
     // SendExternalBeginFrame()'s explicit "only valid when
-    // external_begin_frame_enabled is true" -- worth testing whether it gets
-    // a similar latency win without the hit-testing breakage. NOT YET
-    // CONFIRMED either way as of this writing -- test both the Maps click/
-    // hover repro AND real scroll/pan latency before trusting this.
+    // external_begin_frame_enabled is true". Confirmed 2026-11-10: Maps POI
+    // click/hover now works correctly (highlight-on-hover and click both
+    // register), live-tested via a local lib swap. Scroll/pan latency
+    // reported as "about the same, maybe slightly slower" than with External
+    // Begin Frame on -- a subjective read, not a hard measurement; worth
+    // re-running the original rAF/input-to-repaint timing methodology from
+    // the scroll-latency investigation if a more rigorous answer is needed,
+    // but not done as of this writing.
     //
-    // KNOWN GAP this reintroduces: the distance/priority render-throttle
-    // feature (kSetRenderRate, see llcefproducer.cpp's target_fps gating)
-    // was built around External Begin Frame being the *sole* driver of
-    // repaints -- gating how often SendExternalBeginFrame() was called was
-    // the only per-browser repaint-rate control that existed. With this mode
-    // off, CEF's own internal windowless_frame_rate timer composites
-    // low-priority/distant media at the same rate as everything else
-    // regardless of how often (or whether) RequestRepaint() is called for
-    // that slot -- the CPU/GPU-saving effect of that throttle's intermediate
-    // LOW/SLIDESHOW/HIDDEN tiers is lost (the separate full-unload-after-
-    // grace-period mechanism for SLIDESHOW/HIDDEN is untouched and still
-    // works, since that's driven by destroyMediaSource(), not repaint rate).
-    // Not yet addressed -- flagged to Callum, accepted as a known trade-off
-    // while testing this approach, not silently dropped.
+    // GAP this reintroduced, now RESOLVED differently: the distance/priority
+    // render-throttle feature (kSetRenderRate, see llcefproducer.cpp) was
+    // built around External Begin Frame being the *sole* driver of repaints
+    // -- gating how often SendExternalBeginFrame() was called was the only
+    // per-browser repaint-rate control that existed, so disabling this mode
+    // initially broke that throttle's real CPU/GPU-saving effect (CEF's
+    // internal timer composited every browser at the same rate regardless of
+    // the old gating). Fixed properly via llCefBrowser::SetFrameRate()
+    // (CefBrowserHost::SetWindowlessFrameRate(), callable at runtime -- a
+    // better mechanism than the old one anyway, since it directly controls
+    // CEF's own real paint rate per browser instead of indirectly throttling
+    // by withholding repaint requests).
     windowInfo.external_begin_frame_enabled = false;
 
     const llCefBrowserLibInitOptions& options = LLGetInitOptions();
@@ -388,6 +390,15 @@ void llCefBrowserManagerImpl::RequestRepaint(llCefBrowserHandle handle)
     if (llCefBrowser* b = Get(handle))
     {
         b->RequestRepaint();
+    }
+}
+
+void llCefBrowserManagerImpl::SetFrameRate(llCefBrowserHandle handle, int fps)
+{
+    CEF_REQUIRE_UI_THREAD();
+    if (llCefBrowser* b = Get(handle))
+    {
+        b->SetFrameRate(fps);
     }
 }
 

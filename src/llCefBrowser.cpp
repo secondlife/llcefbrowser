@@ -1331,6 +1331,14 @@ void llCefBrowser::RequestRepaint()
     mCefBrowser->GetHost()->Invalidate(PET_VIEW);
 }
 
+void llCefBrowser::SetFrameRate(int fps)
+{
+    if (mCefBrowser)
+    {
+        mCefBrowser->GetHost()->SetWindowlessFrameRate(fps);
+    }
+}
+
 void llCefBrowser::SetSize(int w, int h, bool clearImmediately)
 {
     // Same underflow hazard as the constructor - see there.
