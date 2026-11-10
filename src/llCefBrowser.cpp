@@ -62,6 +62,33 @@ namespace {
             IMPLEMENT_REFCOUNTING(InvalidateTask);
     };
 
+    // See llCefBrowser::TriggerBeginFrame()'s own comment -- reposts itself onto
+    // CEF's own UI-thread task queue, mirroring cefclient's own
+    // OsrRenderHandlerWin::TriggerBeginFrame() mechanism exactly. Holds a strong
+    // CefRefPtr<llCefBrowser> (that class is itself ref-counted) rather than a
+    // weak pointer the way cefclient does -- TriggerBeginFrame() already
+    // self-terminates the chain via its own mCefBrowser null-check once the
+    // browser closes, so there's nothing a weak reference would additionally
+    // protect against here.
+    class BeginFrameTimerTask : public CefTask {
+        public:
+            BeginFrameTimerTask(CefRefPtr<llCefBrowser> browser,
+                                 std::chrono::steady_clock::time_point lastTime, double delayUs)
+                : mBrowser(browser), mLastTime(lastTime), mDelayUs(delayUs) {}
+
+            void Execute() override {
+                if (mBrowser) {
+                    mBrowser->TriggerBeginFrame(mLastTime, mDelayUs);
+                }
+            }
+
+        private:
+            CefRefPtr<llCefBrowser> mBrowser;
+            std::chrono::steady_clock::time_point mLastTime;
+            double mDelayUs;
+            IMPLEMENT_REFCOUNTING(BeginFrameTimerTask);
+    };
+
 }  // namespace
 
 llCefBrowser::llCefBrowser(llCefBrowserHandle handle, int width, int height, llCefBrowserManagerImpl* manager,
@@ -1318,6 +1345,33 @@ void llCefBrowser::RequestRepaint()
         return;
     }
 
+    // See llCefBrowserLibInitOptions::externalBeginFrameEnabled's own comment
+    // -- an explicit, named toggle between the two repaint-driving
+    // mechanisms, kept specifically so they can still be A/B tested.
+    if (LLGetInitOptions().externalBeginFrameEnabled)
+    {
+        // Mirrors cefclient's own Invalidate(): starts TriggerBeginFrame()'s
+        // self-rescheduling loop if it isn't already running, and is a no-op
+        // otherwise -- see that method's own comment for why this exists as
+        // a materially different mechanism from the plain Invalidate()-based
+        // path below, not just the same rate limit calling a different CEF
+        // method.
+        if (mBeginFramePending)
+        {
+            return;
+        }
+        static constexpr double kBeginFrameRateFps = 60.0;
+        const double delayUs = (1.0 / kBeginFrameRateFps) * 1000000.0;
+        // Default-constructed (epoch) sentinel, matching cefclient's own
+        // Invalidate()->TriggerBeginFrame(0, delay_us) call: makes the first
+        // offset computation huge, which TriggerBeginFrame() clamps down to
+        // delayUs, giving the same "first SendExternalBeginFrame() fires
+        // immediately, subsequent ones settle into the steady interval"
+        // behavior cefclient itself has.
+        TriggerBeginFrame(std::chrono::steady_clock::time_point{}, delayUs);
+        return;
+    }
+
     // See this method's own header comment -- rate-limited here, centrally,
     // regardless of how often or from how many places it's called.
     static constexpr double kMaxRepaintRequestFps = 60.0;
@@ -1329,22 +1383,46 @@ void llCefBrowser::RequestRepaint()
     }
     mLastRepaintRequest = now;
 
-    // See llCefBrowserLibInitOptions::externalBeginFrameEnabled's own comment
-    // -- an explicit, named toggle between the two repaint-driving
-    // mechanisms, kept specifically so they can still be A/B tested with
-    // everything else (this same rate limit, this same call site) held
-    // identical. false (the default): Invalidate(), no dependency on
-    // external-begin-frame mode. true: SendExternalBeginFrame(), only valid
-    // when the browser was created with that mode enabled (see
-    // CreateBrowser()).
-    if (LLGetInitOptions().externalBeginFrameEnabled)
+    mCefBrowser->GetHost()->Invalidate(PET_VIEW);
+}
+
+void llCefBrowser::TriggerBeginFrame(std::chrono::steady_clock::time_point lastTime, double delayUs)
+{
+    // Mirrors cefclient's own OsrRenderHandlerWin::TriggerBeginFrame() as
+    // closely as possible -- see RequestRepaint()'s own comment for why this
+    // exists: it's the one confirmed, real mechanical difference between
+    // this library's SendExternalBeginFrame()-driving (which breaks DOM
+    // hit-testing on WebGL canvas content, e.g. Google Maps POI markers) and
+    // cefclient's own OSR+EBF sample (which doesn't), after ruling out GPU
+    // shared-texture rendering as the explanation (cefclient's own
+    // shared_texture_enabled defaults to false) -- cefclient drives this via
+    // a precisely-timed, self-rescheduling CefPostDelayedTask on CEF's own
+    // UI-thread task queue, not an external caller polling elapsed wall-clock
+    // time in its own render loop the way this library's callers
+    // (SLCefProducer.cpp, the examples) all do. Not yet confirmed whether
+    // this is actually the fix -- this exists specifically to test that.
+    if (!mCefBrowser)
     {
-        mCefBrowser->GetHost()->SendExternalBeginFrame();
+        // Browser closed since this was scheduled -- let the chain die here
+        // rather than rescheduling against a gone browser.
+        mBeginFramePending = false;
+        return;
     }
-    else
+
+    const auto now = std::chrono::steady_clock::now();
+    double offsetUs = std::chrono::duration<double, std::micro>(now - lastTime).count();
+    if (offsetUs > delayUs)
     {
-        mCefBrowser->GetHost()->Invalidate(PET_VIEW);
+        offsetUs = delayUs;
     }
+
+    mBeginFramePending = true;
+
+    CefRefPtr<llCefBrowser> self(this);
+    CefPostDelayedTask(TID_UI, new BeginFrameTimerTask(self, now, delayUs),
+                       static_cast<int64_t>(offsetUs / 1000.0));
+
+    mCefBrowser->GetHost()->SendExternalBeginFrame();
 }
 
 void llCefBrowser::SetFrameRate(int fps)

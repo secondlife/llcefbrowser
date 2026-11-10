@@ -683,8 +683,30 @@ class llCefBrowser : public CefClient,
 
         // Caps how often RequestRepaint() actually reaches CEF -- see that
         // method's own comment for why this has to live here rather than in
-        // each caller.
+        // each caller. Only used when externalBeginFrameEnabled is false
+        // (the Invalidate()-based path) -- see mBeginFramePending for the
+        // true/SendExternalBeginFrame()-based path's own state instead.
         std::chrono::steady_clock::time_point mLastRepaintRequest;
+
+        // True while TriggerBeginFrame()'s self-rescheduling CefPostDelayedTask
+        // loop is running (externalBeginFrameEnabled == true only) -- mirrors
+        // cefclient's own begin_frame_pending_ exactly, so RequestRepaint()
+        // starting that loop is idempotent the same way cefclient's own
+        // Invalidate() is. See TriggerBeginFrame()'s own comment for the full
+        // mechanism and why this exists (an A/B-test-only, more faithful
+        // replica of cefclient's precisely CEF-task-queue-scheduled timing,
+        // instead of an external caller polling elapsed wall-clock time).
+        bool mBeginFramePending = false;
+
+        // Mirrors cefclient's OsrRenderHandlerWin::TriggerBeginFrame() exactly
+        // (see that method's own comment in llCefBrowser.cpp for the real
+        // reason this exists). lastTime/delayUs are in the same units
+        // cefclient uses (microseconds), just via std::chrono instead of raw
+        // uint64_t/float, to directly test whether CEF-task-queue-scheduled
+        // timing (vs. an external caller polling wall-clock time) is itself
+        // the thing that makes SendExternalBeginFrame()-driven hit-testing
+        // work correctly in cefclient's own OSR+EBF sample but not here.
+        void TriggerBeginFrame(std::chrono::steady_clock::time_point lastTime, double delayUs);
 
         // Bitmask of CEF EVENTFLAG_*_MOUSE_BUTTON values for buttons currently
         // held down, updated by SendMouseClickEvent and stamped onto every

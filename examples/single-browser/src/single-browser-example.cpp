@@ -543,6 +543,7 @@ void singleBrowser::init()
     initOptions.rootCachePath = default_root_cache_path.string();
     initOptions.logFile = default_log_file.string();
     initOptions.userAgentProduct = "llCefBrowser: SingleBrowser";
+    initOptions.externalBeginFrameEnabled = false;
 #if defined(__APPLE__)
     // Not a real .app bundle -- point CEF straight at the framework it was
     // built against (see LLCEFBROWSER_EXAMPLE_CEF_FRAMEWORK_DIR's own
