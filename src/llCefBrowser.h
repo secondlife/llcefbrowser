@@ -303,25 +303,6 @@ class llCefBrowser : public CefClient,
 
         void SetSize(int w, int h, bool clearImmediately = false);
 
-        // Sets this browser's real internal compositor rate (CEF's own
-        // CefBrowserHost::SetWindowlessFrameRate() -- callable at runtime, not
-        // just at creation via CefBrowserSettings.windowless_frame_rate).
-        // Unlike RequestRepaint()'s on-demand extra repaint, this directly
-        // caps how fast CEF's own windowless_frame_rate-paced internal timer
-        // composites THIS browser, independent of RequestRepaint()/Invalidate()
-        // calls entirely -- the real CPU/GPU-saving mechanism for distance/
-        // priority-throttled media now that external_begin_frame_enabled is
-        // off (see llCefBrowserManagerImpl::CreateBrowser()'s own comment for
-        // why the old SendExternalBeginFrame()-gating approach stopped
-        // working once that mode was disabled). CEF's own minimum is 1, no
-        // stated maximum; a no-op if the browser hasn't been created yet.
-        //
-        // CAUTION: see this method's own comment in the public
-        // include/llCefBrowserManager.h for a real connection-churn
-        // regression found when this was wired into the live priority
-        // system (2026-11-10) -- test in isolation before doing that again.
-        void SetFrameRate(int fps);
-
         // Requests a new compositor frame right now via CefBrowserHost::Invalidate(),
         // rather than waiting for CEF's own windowless_frame_rate-driven internal timer
         // to eventually get around to one. A no-op if the browser hasn't been created

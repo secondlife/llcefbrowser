@@ -150,15 +150,42 @@ void llCefBrowser::OnPaint(CefRefPtr<CefBrowser> browser,
 
     // PET_VIEW: buffer is always the full current frame at width x height,
     // regardless of what dirtyRects reports changed.
-    const size_t bytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
-    const uint8_t* src = static_cast<const uint8_t*>(buffer);
-    mViewBuffer.assign(src, src + bytes);
-    mViewBufferWidth = width;
-    mViewBufferHeight = height;
-
-    if (mPopupVisible && ! mPopupBuffer.empty())
+    //
+    // FIX (2026-11-11): mViewBuffer only needs to stay current while a popup
+    // is actually visible -- it exists purely so CompositePopup() has an
+    // up-to-date base frame to blit the popup onto. This used to be an
+    // unconditional mViewBuffer.assign() on every single call, duplicating
+    // WriteFrame()'s own full-frame copy below even when no popup was ever
+    // shown (by far the common case). A one-off CEF trace capture identified
+    // CefRenderWidgetHostViewOSR::OnPaint as the single largest cost on the
+    // browser-process UI thread once several browsers are alive at once
+    // (~46% of a 5s window at 9-10 live browsers) -- this redundant copy was
+    // roughly doubling that cost for the overwhelmingly common no-popup
+    // case. See the Viewer-side investigation notes for the full trace.
+    //
+    // Trade-off: mViewBuffer can now be one PET_VIEW paint stale at the
+    // exact instant a popup first appears (OnPopupShow(true) carries no
+    // pixel buffer of its own to seed it with), rather than always being
+    // continuously current. In practice a popup's own appearance (focus/
+    // hover entering it) all but always triggers its own PET_VIEW paint in
+    // the same or immediately following tick, so this self-corrects within
+    // a frame or two; accepted as a non-issue for a transient overlay.
+    if (mPopupVisible)
     {
-        CompositePopup();
+        const size_t bytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+        const uint8_t* src = static_cast<const uint8_t*>(buffer);
+        mViewBuffer.assign(src, src + bytes);
+        mViewBufferWidth = width;
+        mViewBufferHeight = height;
+
+        if (! mPopupBuffer.empty())
+        {
+            CompositePopup();
+        }
+        else
+        {
+            WriteFrame(buffer, width, height);
+        }
     }
     else
     {
@@ -1423,14 +1450,6 @@ void llCefBrowser::TriggerBeginFrame(std::chrono::steady_clock::time_point lastT
                        static_cast<int64_t>(offsetUs / 1000.0));
 
     mCefBrowser->GetHost()->SendExternalBeginFrame();
-}
-
-void llCefBrowser::SetFrameRate(int fps)
-{
-    if (mCefBrowser)
-    {
-        mCefBrowser->GetHost()->SetWindowlessFrameRate(fps);
-    }
 }
 
 void llCefBrowser::SetSize(int w, int h, bool clearImmediately)

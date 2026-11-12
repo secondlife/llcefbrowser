@@ -127,28 +127,6 @@ class llCefBrowserManager {
         // Idempotent: calling it twice in the same tick is harmless.
         void RequestRepaint(llCefBrowserHandle handle);
 
-        // Sets this browser's real internal compositor rate (CEF's own
-        // CefBrowserHost::SetWindowlessFrameRate(), callable at runtime). Unlike
-        // RequestRepaint()'s on-demand extra repaint, this directly caps how fast
-        // CEF's own internal timer composites this specific browser, independent
-        // of RequestRepaint() calls entirely -- the real CPU/GPU-saving throttle
-        // mechanism for distance/priority-based media. CEF's own minimum is 1,
-        // no stated maximum; a no-op if the browser hasn't been created yet.
-        //
-        // CAUTION (2026-11-10): wiring this into the Viewer's live priority system
-        // (calling it on every real priority-tier change) was tried and reverted --
-        // with several same-priority media instances competing for a small number
-        // of "full rate" slots, their near-identical interest values jittered tier
-        // assignments frequently, and calling this (even correctly, gated on real
-        // changes, not spammed) was enough to cause a connection-churn/reconnect-
-        // loop regression -- slots repeatedly hit an idle-timeout disconnect and
-        // reconnected from scratch, even for media front-and-center in view. Not
-        // confirmed which part of SetWindowlessFrameRate() causes this. Test it in
-        // isolation (call it once manually against a live tab and watch for any
-        // disruption) before wiring it back into a live, frequently-changing
-        // priority system.
-        void SetFrameRate(llCefBrowserHandle handle, int fps);
-
         // Pulls the newest rendered frame (tightly-packed BGRA32) if one has
         // arrived since the last successful call. Returns false (dst
         // untouched) otherwise.

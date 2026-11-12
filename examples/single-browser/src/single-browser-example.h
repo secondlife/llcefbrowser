@@ -155,15 +155,6 @@ class singleBrowser {
         // initCEFCallbacks(); update() clears it after pulling the frame.
         bool mPageChanged = false;
 
-        // Isolation test for a real connection-churn regression found wiring
-        // SetFrameRate() into the Viewer's live priority system -- see the
-        // Actions menu's "Stress Test SetFrameRate" item and update()'s own
-        // comment. While true, update() calls SetFrameRate() every single
-        // frame, alternating 5/60fps, to simulate (and far exceed) how often
-        // several real, rapidly-tier-flipping media instances triggered it
-        // in the field.
-        bool mStressTestSetFrameRate = false;
-
         // Used to marshall static function callbacks to a instance of the app class
         static void resizeCallbackStatic(GLFWwindow* window, int width, int height) {
             static_cast<singleBrowser*>(glfwGetWindowUserPointer(window))->resizeCallback(width, height);

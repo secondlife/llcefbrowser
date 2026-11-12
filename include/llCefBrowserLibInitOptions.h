@@ -147,24 +147,58 @@ struct llCefBrowserLibInitOptions
     // process-wide, but are read from this same, single options instance -
     // this library has no per-browser settings override, so every browser
     // it creates shares one configuration.
+    // A/B TESTED AND REFUTED (2026-11-11): temporarily dropped 60 -> 10 (a 6x
+    // cut) to test whether DoMessageLoopWork()'s 50ms-1000ms+ stalls (once
+    // ~9-10 browsers are live) scale with total composite-events/sec across
+    // all live browsers. This is a creation-time CefBrowserSettings value
+    // (llCefBrowserManagerImpl::CreateBrowser(), set once, never touched
+    // again) -- NOT the same code path as the runtime SetFrameRate()/
+    // SetWindowlessFrameRate() call that caused the connection-churn
+    // regression reverted in bff3b8d825. Result: no meaningful improvement --
+    // same live-tested repro (walk to the 6-prim area) still showed
+    // continuous [phase2]/[iteration total] costs in the 50-200ms range at
+    // 9-10 active slots, just smoothed (lower peak, higher floor) rather than
+    // reduced. Composite/paint rate is not the driver. Left at 60 (the
+    // shipped default).
     int windowlessFrameRate = 60;  // fps for CefRenderHandler::OnPaint; CEF's own default is 30
 
     // Which mechanism llCefBrowser::RequestRepaint() uses to drive repainting,
     // and whether CefWindowInfo::external_begin_frame_enabled is set at
     // browser creation (see llCefBrowserManagerImpl::CreateBrowser()'s own
-    // comment for the full history). false (the default, used by every real
-    // consumer of this library as of 2026-11-10): RequestRepaint() calls
-    // CefBrowserHost::Invalidate(), and CEF's own internal windowless_frame_rate
-    // timer composites regardless. true: RequestRepaint() calls CefBrowserHost::
-    // SendExternalBeginFrame() instead (only valid with this mode enabled), and
-    // CEF never composites except in response to that call -- found to break
-    // DOM hit-testing/click on WebGL canvas content (confirmed repro: Google
-    // Maps POI markers), independent of how that call is paced. Exists as an
-    // explicit, named toggle (not just deleted outright) so this can still be
-    // A/B tested -- e.g. against a future CEF version, or to help narrow down
-    // the upstream bug further -- with everything else (pacing, call site)
-    // held identical between the two modes.
-    bool externalBeginFrameEnabled = false;
+    // comment for the full history). true (the default again as of
+    // 2026-11-12, reverting the 2026-11-10 change below): RequestRepaint()
+    // calls CefBrowserHost::SendExternalBeginFrame(), and CEF never composites
+    // except in response to that call -- this is what lets the distance/
+    // priority render-throttle (kSetRenderRate) actually reduce a background
+    // browser's real CEF-internal paint rate, by simply calling this less
+    // often, with no further runtime API needed. Known, accepted, already-
+    // filed-upstream cost: this mode breaks DOM hit-testing/click on WebGL
+    // canvas content (confirmed repro: Google Maps POI markers).
+    //
+    // false (the default 2026-11-10 through 2026-11-12, to fix that Maps
+    // bug): RequestRepaint() calls CefBrowserHost::Invalidate() instead, and
+    // CEF's own internal windowless_frame_rate timer composites every live
+    // browser regardless of priority or how often Invalidate() is called --
+    // this silently disabled the render-throttle's real CPU/GPU-saving effect
+    // (kSetRenderRate's tier labels became cosmetic-only), and without a
+    // working per-tier substitute (SetFrameRate()/SetHidden() were each tried
+    // and reverted, see their own now-deleted history in this file and in
+    // llCefBrowserManager.h), every live browser compositing at full rate
+    // regardless of relevance turned out to be what actually destabilized the
+    // producer once ~9-10 browsers are alive (CefRenderWidgetHostViewOSR::
+    // OnPaint serializing on the single browser-process UI thread -- see the
+    // Viewer-side investigation notes). A clean A/B test checking out the
+    // Viewer from 2026-11-04 (before this mode was ever touched, EBF simply
+    // on throughout) confirmed that build is completely stable under the
+    // same repro that destabilizes this one with the mode off -- i.e. this
+    // mode being on was never the problem; losing the render-throttle's real
+    // effect when it went off, with nothing adequate replacing it, was.
+    //
+    // Exists as an explicit, named toggle (not just deleted outright) so this
+    // can still be A/B tested -- e.g. against a future CEF version, or to
+    // help narrow down the upstream hit-test bug further -- with everything
+    // else (pacing, call site) held identical between the two modes.
+    bool externalBeginFrameEnabled = true;
     llCefFeatureState javascript = llCefFeatureState::Default;
     llCefFeatureState javascriptAccessClipboard = llCefFeatureState::Default;
     llCefFeatureState imageLoading = llCefFeatureState::Default;

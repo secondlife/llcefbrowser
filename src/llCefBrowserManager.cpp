@@ -104,11 +104,6 @@ void llCefBrowserManager::RequestRepaint(llCefBrowserHandle handle)
     mImpl->RequestRepaint(handle);
 }
 
-void llCefBrowserManager::SetFrameRate(llCefBrowserHandle handle, int fps)
-{
-    mImpl->SetFrameRate(handle, fps);
-}
-
 bool llCefBrowserManager::CopyLatestFrame(llCefBrowserHandle handle, std::vector<uint8_t>& dst, int& w, int& h)
 {
     return mImpl->CopyLatestFrame(handle, dst, w, h);

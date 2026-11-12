@@ -75,8 +75,6 @@ class llCefBrowserManagerImpl {
 
         void RequestRepaint(llCefBrowserHandle handle);
 
-        void SetFrameRate(llCefBrowserHandle handle, int fps);
-
         bool CopyLatestFrame(llCefBrowserHandle handle, std::vector<uint8_t>& dst, int& w, int& h);
 
         bool CanGoBack(llCefBrowserHandle handle) const;
