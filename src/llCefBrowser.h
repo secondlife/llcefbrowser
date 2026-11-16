@@ -27,6 +27,7 @@
 
 #pragma once
 #include "include/cef_client.h"
+#include "include/cef_context_menu_handler.h"
 #include "llCefBrowserHandle.h"
 #include "llCefBrowserPixelBuffer.h"
 #include <algorithm>
@@ -51,6 +52,7 @@ class llCefBrowser : public CefClient,
     public CefDialogHandler,
     public CefJSDialogHandler,
     public CefDownloadHandler,
+    public CefContextMenuHandler,
     public CefAudioHandler {
     public:
         // initialUrl is deliberately NOT passed to CefBrowserHost::CreateBrowser()
@@ -95,13 +97,63 @@ class llCefBrowser : public CefClient,
         CefRefPtr<CefAudioHandler> GetAudioHandler() override {
             return this;
         }
+        CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override {
+            return this;
+        }
         bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                       CefProcessId sourceProcess,
                                       CefRefPtr<CefProcessMessage> message) override;
 
+        // --- CefContextMenuHandler ---
+        //
+        // FIX (2026-11-16): unimplemented until now, which left CEF's own
+        // default native context menu in play on every right-click, on top of
+        // the Viewer's own complete, working custom menu (menu_media_ctrl.xml,
+        // wired through gEditMenuHandler -- see that file and
+        // LLMediaCtrl::handleRightMouseDown()'s own comment). For a windowless/
+        // OSR browser with no real backing NSWindow at all, CEF's attempt to
+        // show its own native menu on macOS specifically crashed the entire
+        // producer process outright: `-[NSApplication isHandlingSendEvent]:
+        // unrecognized selector sent to instance ...`, an NSInvalidArgument
+        // exception inside AppKit's own context-menu/event-reentrancy
+        // tracking, consistent with a known class of CEF-on-macOS-OSR issue
+        // where NSMenu's modal tracking loop assumes a real window-backed app
+        // structure that a windowless browser doesn't have. Confirmed QA repro
+        // (right-click -> Copy on a web page, e.g. join.secondlife.com): the
+        // whole producer terminated and relaunched fresh, which is what
+        // actually produced the "page refreshed, typed text gone" symptom --
+        // not one page reloading, the entire producer restarting and every
+        // slot reconnecting from scratch. Clearing the model here suppresses
+        // CEF's own native menu entirely, leaving the Viewer's own custom one
+        // (which already works, including Cut/Copy/Paste) as the only menu
+        // shown, on every platform.
+        void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                                  CefRefPtr<CefContextMenuParams> params,
+                                  CefRefPtr<CefMenuModel> model) override {
+            model->Clear();
+        }
+
         // --- CefRenderHandler ---
         void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
         bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override;
+
+        // DIAGNOSTIC (2026-11-12): both left at CEF's own default (unimplemented,
+        // returns false) until now -- investigating the Google Maps POI hit-test
+        // bug under external_begin_frame_enabled. GetRootScreenRect() returning
+        // false already falls back to GetViewRect() per CEF's own doc comment, so
+        // implementing it explicitly shouldn't change anything; GetScreenPoint()
+        // returning false provides no view-to-screen translation at all, which --
+        // for a windowless/OSR browser with no real OS window -- may leave some
+        // downstream Viz/compositor hit-test-region code consuming an
+        // uninitialized or default screenX/screenY for GPU-composited content
+        // (e.g. a WebGL canvas) specifically, rather than failing gracefully, the
+        // way it evidently does for plain DOM elements. Implemented here as a
+        // trivial passthrough -- screen space treated as identical to view space,
+        // the standard convention for a headless/embedded OSR browser with no
+        // real screen position at all.
+        bool GetRootScreenRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+        bool GetScreenPoint(CefRefPtr<CefBrowser> browser, int viewX, int viewY,
+                             int& screenX, int& screenY) override;
         void OnPaint(CefRefPtr<CefBrowser> browser,
                      PaintElementType type,
                      const RectList& dirtyRects,

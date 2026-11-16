@@ -126,6 +126,24 @@ bool llCefBrowser::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& s
     return true;
 }
 
+// See this method's own declaration in llCefBrowser.h for why.
+bool llCefBrowser::GetRootScreenRect(CefRefPtr<CefBrowser> browser, CefRect& rect)
+{
+    CEF_REQUIRE_UI_THREAD();
+    GetViewRect(browser, rect);
+    return true;
+}
+
+// See this method's own declaration in llCefBrowser.h for why.
+bool llCefBrowser::GetScreenPoint(CefRefPtr<CefBrowser> browser, int viewX, int viewY,
+                                   int& screenX, int& screenY)
+{
+    CEF_REQUIRE_UI_THREAD();
+    screenX = viewX;
+    screenY = viewY;
+    return true;
+}
+
 void llCefBrowser::OnPaint(CefRefPtr<CefBrowser> browser,
                            PaintElementType type,
                            const RectList& dirtyRects,
